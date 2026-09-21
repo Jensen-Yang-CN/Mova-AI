@@ -32,12 +32,33 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:theme="@style/Theme.MovaAI">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              分享入口：在微信里长按对方的消息 → 分享 → 选择 Mova-AI，
+              内容作为 EXTRA_TEXT 送进来，App 直接给出回复建议。
+
+              这是刻意选择的接入方式。另一条路是 AccessibilityService 读屏，
+              它确实能"自动感知你正在用微信"、不需要手动分享，但代价是：
+                ① 微信服务协议明确禁止自动化读取，账号可能被限制
+                ② Android 13+ 对侧载应用默认禁止开启无障碍，需先手动允许"受限设置"
+                ③ 读屏读到的是**对方**发来的消息，上传云端涉及第三方个人信息合规
+              分享入口由用户主动发起，合规、可靠，且不受微信改版影响。
+
+              launchMode=singleTask：分享时复用已有实例（走 onNewIntent），
+              避免每分享一次就叠一层 Activity。
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
 

@@ -22,6 +22,10 @@ class AppContainer(context: Context) {
     val json = ApiFactory.json
     val settings = SettingsRepository(appContext)
     val store = LocalStore(appContext, json)
+
+    /** 接收其它 App 分享过来的文字（微信长按消息 → 分享 → Mova-AI） */
+    val sharedInbox = SharedInbox()
+
     val repository = MovaRepository(
         context = appContext,
         api = ApiFactory.createApi(ApiFactory.createClient(), json),

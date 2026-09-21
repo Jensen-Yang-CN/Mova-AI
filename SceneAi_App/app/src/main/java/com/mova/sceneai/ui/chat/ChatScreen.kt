@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -32,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.mova.sceneai.core.AppContainer
 import com.mova.sceneai.core.LoadState
+import com.mova.sceneai.core.ShareSource
 import com.mova.sceneai.core.movaViewModel
 import com.mova.sceneai.core.toUiError
 import com.mova.sceneai.data.model.ChatDto
@@ -58,6 +60,16 @@ import kotlinx.coroutines.launch
  * 推荐回复 / 备选方案 / 为什么这样回。解释区让 AI 从"代笔"变成"协作方"。
  *
  * 三个可控维度（场景 + 目标 + 风格）都是显式的 chips，用户能看见自己在控制什么。
+ *
+ * ## 两个入口
+ * ① **手动输入**：用户自己把对方的话粘进来。
+ * ② **系统分享**：在微信里长按对方的消息 → 分享 → Mova-AI。
+ *    内容经 `MainActivity` → [com.mova.sceneai.core.SharedInbox] → 本页 ViewModel，
+ *    自动填入并立刻生成建议。
+ *
+ * 刻意**不做**无障碍读屏自动抓取：那虽然能自动感知"你正在用微信"，但违反微信
+ * 服务协议、在 Android 13+ 上需要用户手动解除「受限设置」，且涉及第三方个人信息
+ * 合规。完整的三方案对比见 `docs/03-UI-UX设计规范.md` §3.5。
  */
 @Composable
 fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
@@ -66,6 +78,17 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
     val semantic = LocalMovaSemanticColors.current
 
     MovaScreen(title = "聊天辅助", subtitle = "帮你把话说好，但决定权在你", onBack = onBack) {
+
+        // 从别的 App 分享进来时的提示条：让用户明白这句话是从哪来的、正在发生什么
+        state.fromShare?.let { source ->
+            InfoBanner(
+                text = "${source.label}：内容已填入下方，正在生成回复建议。" +
+                    "这是你主动分享的，App 不会读取其它应用的界面。",
+                icon = Icons.Filled.Share,
+                container = semantic.successContainer,
+                contentColor = semantic.onSuccessContainer,
+            )
+        }
 
         MovaChipRow(
             options = listOf("回复对方", "润色我的话"),
@@ -293,19 +316,50 @@ data class ChatUiState(
     val contextExpanded: Boolean = false,
     val messages: List<ChatMessage> = emptyList(),
     val load: LoadState<ChatDto> = LoadState.Idle,
+    /** 非空表示这次的内容是从其它应用分享进来的（详见 SharedInbox） */
+    val fromShare: ShareSource? = null,
 )
 
+/**
+ * 聊天页的状态机。
+ *
+ * 除了常规的输入/风格/目标管理，它还承担一件特殊的事：
+ * **在页面创建时消费一次 [com.mova.sceneai.core.SharedInbox] 里的分享内容**，
+ * 填进输入框并自动生成。这让"从微信分享进来"变成一个零操作的动作。
+ *
+ * 用 `XxxUiState` + `StateFlow` 表达状态，Composable 只负责渲染 ——
+ * 因此"加载中 / 成功 / 失败 / 来源是分享"这些分支在界面上是显式的，
+ * 不会出现"某个状态下界面不知道该显示什么"。
+ */
 class ChatViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    init {
+        // 页面被创建时先看一眼收件箱：如果是"分享进来"的，直接填好并开始生成。
+        // 放在 init 里而不是 Composable 的 LaunchedEffect 里，是为了让
+        // "分享 → 生成"这条链路只被触发一次，即使页面因配置变化重组也不会重复请求。
+        consumeSharedInput()
+    }
+
+    private fun consumeSharedInput() {
+        val shared = container.sharedInbox.take() ?: return
+        _state.value = _state.value.copy(
+            mode = ChatMode.REPLY,
+            input = shared.text,
+            fromShare = shared.source,
+        )
+        generate()
+    }
 
     fun setMode(mode: ChatMode) {
         _state.value = _state.value.copy(mode = mode, load = LoadState.Idle)
     }
 
     fun onInputChange(value: String) {
-        _state.value = _state.value.copy(input = value)
+        // 用户一旦手动改动内容，就不再强调"来自分享"
+        _state.value = _state.value.copy(input = value, fromShare = null)
     }
 
     fun setStyle(value: String) {

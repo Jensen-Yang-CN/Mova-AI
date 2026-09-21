@@ -118,6 +118,7 @@ fun MovaRoot() {
                     navController = navController,
                     modifier = Modifier.padding(bottom = padding.calculateBottomPadding()),
                     startDestination = if (settings.onboardingDone) Routes.HOME else Routes.ONBOARDING,
+                    onboardingDone = settings.onboardingDone,
                 )
             }
         }
@@ -129,7 +130,22 @@ private fun MovaNavHost(
     navController: NavHostController,
     modifier: Modifier,
     startDestination: String,
+    onboardingDone: Boolean,
 ) {
+    // 从别的 App 分享文字进来时，直接跳到聊天页。
+    // 聊天页的 ViewModel 会自己从收件箱取走内容、填入输入框并触发生成。
+    //
+    // 两个刻意的约束：
+    //   ① 首启向导没走完就不跳转 —— 否则用户会被直接扔进聊天页，错过权限与连接配置
+    //   ② 已经在聊天页时不重复导航 —— 避免分享一次叠一层页面
+    val pendingShare by MovaApp.instance.container.sharedInbox.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingShare, onboardingDone) {
+        val onChat = navController.currentDestination?.route == Routes.CHAT
+        if (pendingShare != null && onboardingDone && !onChat) {
+            navController.navigate(Routes.CHAT) { launchSingleTop = true }
+        }
+    }
+
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
 
         composable(Routes.ONBOARDING) {
