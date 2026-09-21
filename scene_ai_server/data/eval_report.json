@@ -1,0 +1,23 @@
+{
+  "total": 40,
+  "contract_valid": 39,
+  "contract_valid_rate": 0.975,
+  "scene_accuracy": 0.8718,
+  "intent_accuracy": 0.8205,
+  "need_cloud_accuracy": 0.8205,
+  "complexity_mae": 0.1105,
+  "slot_precision": 0.8137,
+  "slot_recall": 0.8646,
+  "slot_f1": 0.8384,
+  "slot_field_accuracy": 0.7386,
+  "per_scene_intent_accuracy": {
+    "chat": 1.0,
+    "food": 0.875,
+    "location": 0.6667,
+    "none": 0.4286,
+    "reading": 1.0
+  },
+  "failure_reasons": {
+    "槽位 place_type 取值非法": 1
+  }
+}

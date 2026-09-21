@@ -1,0 +1,143 @@
+{
+  "config": {
+    "limit": "150",
+    "budget": "60",
+    "k_samples": "3",
+    "workers": "8",
+    "coverage_multiplier": "1.35",
+    "coverage_floor": "0.25",
+    "max_share_per_cell": "0.4",
+    "logprob_k": "8",
+    "gold_size": "40",
+    "dedup_threshold": "0.8",
+    "out_dir": "E:\\CodeBase_YangJunJie\\移动AI生活助手\\scene_ai_server\\data",
+    "cache_dir": "E:\\CodeBase_YangJunJie\\移动AI生活助手\\scene_ai_server\\data\\cache"
+  },
+  "seeds": {
+    "total": 150,
+    "scene_intent_pairs": 13
+  },
+  "labeling": {
+    "total": 150,
+    "contract_valid": 150,
+    "contract_invalid": 0,
+    "json_valid_rate": 1.0,
+    "top_invalid_errors": [],
+    "avg_latency_ms": 1052,
+    "logprob_available": 150
+  },
+  "dedup": {
+    "input": 150,
+    "kept": 128,
+    "removed": 22,
+    "removal_rate": 0.1467,
+    "lsh_candidate_pairs": 274,
+    "exact_checks": 274,
+    "threshold": 0.8
+  },
+  "coverage": {
+    "budget": 81,
+    "objective": 47.0088,
+    "random_baseline": 39.7148,
+    "improvement_over_random": 0.1837,
+    "cell_coverage": 1.0,
+    "universe_cells": 37,
+    "covered_cells": 37,
+    "marginal_gain_first": 0.987826,
+    "marginal_gain_last": 0.239062
+  },
+  "allocation": {
+    "target_mix": {
+      "easy": 0.3,
+      "medium": 0.5,
+      "hard": 0.2
+    },
+    "achieved_mix": {
+      "easy": 0.3667,
+      "hard": 0.1333,
+      "medium": 0.5
+    },
+    "band_targets": {
+      "easy": 18,
+      "medium": 30,
+      "hard": 12
+    },
+    "stage_counts": {
+      "coverage_floor": 37,
+      "mix_fill": 19,
+      "quality_fill": 4
+    },
+    "per_cell": {
+      "chat|reply_suggest|easy|goal+relation+target_tone": 1,
+      "chat|reply_suggest|medium|goal+relation+target_tone": 1,
+      "chat|rewrite|easy|goal+target_tone": 1,
+      "chat|rewrite|medium|goal+target_tone": 1,
+      "chat|tone_adjust|easy|goal+relation+target_tone": 2,
+      "chat|tone_adjust|medium|goal+relation+target_tone": 2,
+      "food|diet_advice|easy|ingredients+meal": 3,
+      "food|diet_advice|medium|ingredients+meal": 2,
+      "food|ingredient_check|easy|ingredients": 1,
+      "food|ingredient_check|easy|ingredients+meal": 1,
+      "food|ingredient_check|medium|ingredients": 2,
+      "food|ingredient_check|medium|ingredients+meal": 1,
+      "food|none|easy|-": 1,
+      "food|none|easy|place_type+time_bucket": 1,
+      "food|recipe_lookup|easy|ingredients+meal": 4,
+      "location|nearby_hint|easy|place_type+time_bucket": 1,
+      "location|nearby_hint|hard|ingredients+meal": 1,
+      "location|nearby_hint|medium|place_type+time_bucket": 3,
+      "location|timing_reminder|easy|place_type+time_bucket": 1,
+      "location|timing_reminder|hard|place_type+time_bucket": 2,
+      "location|timing_reminder|medium|place_type+time_bucket": 3,
+      "none|none|easy|-": 1,
+      "none|none|hard|-": 1,
+      "none|none|medium|-": 2,
+      "reading|difficulty_judge|easy|source+text_length+topic": 1,
+      "reading|difficulty_judge|medium|source+text_length+topic": 3,
+      "reading|key_points|easy|-": 1,
+      "reading|key_points|easy|source+text_length+topic": 1,
+      "reading|key_points|hard|-": 1,
+      "reading|key_points|hard|source+text_length+topic": 1,
+      "reading|key_points|medium|-": 1,
+      "reading|key_points|medium|source+text_length+topic": 3,
+      "reading|summarize|easy|source+text_length+topic": 1,
+      "reading|summarize|hard|-": 1,
+      "reading|summarize|hard|source+text_length+topic": 1,
+      "reading|summarize|medium|-": 3,
+      "reading|summarize|medium|source+text_length+topic": 3
+    },
+    "notes": [
+      "easy 档实际占比 36.7%，目标 30.0%，偏差超过 6 个百分点",
+      "hard 档实际占比 13.3%，目标 20.0%，偏差超过 6 个百分点"
+    ],
+    "selected": 60
+  },
+  "dataset": {
+    "size": 60,
+    "avg_quality": 0.7944,
+    "avg_difficulty": 0.3975,
+    "scene_distribution": {
+      "chat": 0.1333,
+      "food": 0.2667,
+      "location": 0.1833,
+      "none": 0.0667,
+      "reading": 0.35
+    },
+    "band_distribution": {
+      "easy": 0.3667,
+      "hard": 0.1333,
+      "medium": 0.5
+    },
+    "soft_label": {
+      "tokens_total": 4247,
+      "avg_tokens_per_sample": 70.8,
+      "avg_bytes_per_sample": 27930.5,
+      "total_mb": 1.598,
+      "extrapolated_50k_gb": 1.3
+    }
+  },
+  "gold": {
+    "size": 40,
+    "path": "eval_gold.jsonl"
+  }
+}
