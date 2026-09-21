@@ -1,0 +1,42 @@
+# ==================== Android / Gradle ====================
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+output.json
+release/
+
+# 说明：Gradle Wrapper 的 gradle/wrapper/gradle-wrapper.jar 是官方要求入库的文件，
+# 刻意不在此忽略，否则别人 clone 后无法执行 ./gradlew。
+
+# ==================== IDE / 编辑器 ====================
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# ==================== 密钥与本地配置 ====================
+# 切勿把真实的 DashScope / 大模型 API Key 提交上去
+.env
+.env.local
+config.local.*
