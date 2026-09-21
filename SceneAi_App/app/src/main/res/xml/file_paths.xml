@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 路径声明：相机全分辨率拍照的临时输出目录。
+  只暴露 cache 下的 images/ 子目录，不暴露整个存储。
+-->
+<paths>
+    <cache-path
+        name="mova_captures"
+        path="images/" />
+</paths>

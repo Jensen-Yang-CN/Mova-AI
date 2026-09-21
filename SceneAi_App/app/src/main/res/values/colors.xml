@@ -2,4 +2,6 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- 浅色启动窗口背景，与 Compose 主题的 surface 保持一致，避免冷启动闪白/闪黑 -->
+    <color name="mova_window_background">#FFFCF8FF</color>
 </resources>

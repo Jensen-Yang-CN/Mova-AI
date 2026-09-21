@@ -1,9 +1,13 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.Scene_Ai_App" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    <!--
+      纯 Compose 应用：XML 主题只负责「启动窗口背景 + 系统栏」，
+      其余配色全部由 Compose 的 MovaTheme 接管，避免两套主题系统打架。
+    -->
+    <style name="Theme.MovaAI" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/mova_window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
     </style>
-
-    <style name="Theme.Scene_Ai_App" parent="Base.Theme.Scene_Ai_App" />
 </resources>

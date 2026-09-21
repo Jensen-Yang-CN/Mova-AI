@@ -1,3 +1,9 @@
 <resources>
-    <string name="app_name">Scene_Ai_App</string>
+    <string name="app_name">Mova-AI</string>
+    <string name="app_name_full">Mova-AI 生活助手</string>
+    <string name="app_slogan">不是等你开口，而是在你需要的那一刻，刚好出现。</string>
+
+    <!-- 通知（场景触发链路） -->
+    <string name="channel_scene_trigger_name">场景主动提醒</string>
+    <string name="channel_scene_trigger_desc">Mova-AI 根据你当前所处的场景主动提供帮助</string>
 </resources>

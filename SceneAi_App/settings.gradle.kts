@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Scene_Ai_App"
+rootProject.name = "MovaAI"
 include(":app")
