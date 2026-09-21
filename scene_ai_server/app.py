@@ -1,413 +1,449 @@
-import uvicorn
+"""Mova-AI 云端服务入口。
 
-print("✅ app.py 已被加载")
+与原版相比的几处结构性改动：
+  ① 拆出 mova/ 子包：配置、厂商适配、提示词各自独立，app.py 只负责路由
+  ② 新增 /health 与 /capabilities：App 的首启向导与首页状态卡依赖它们
+  ③ 每个响应都带 meta（执行方式 / 模型 / 耗时 / 阶段拆解 / 路由原因）——
+     这是 App 技术面板的唯一数据来源
+  ④ 上传做**魔数嗅探**而不是听信 Content-Type，并限制体积
+  ⑤ 关键路径全部改为结构化日志，不再 print 完整响应体
+  ⑥ 大模型调用失败会重试，并映射成合适的 HTTP 状态码
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
-import base64
-import json
-import os
-import requests
-from pydantic import BaseModel
-from pypdf import PdfReader
+启动：
+    uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+接口文档：
+    http://localhost:8000/docs
+"""
 
-# 启动命令（端口需与 Android 端 BASE_URL 保持一致）：
-# uvicorn app:app --host 0.0.0.0 --port 8000 --reload
-# 接口文档：http://localhost:8000/docs
-app = FastAPI()
+from __future__ import annotations
 
-# ⚠️ 安全约定：API Key 一律从环境变量读取，禁止硬编码进源码。
-# 请到阿里云百炼（DashScope）控制台申请 Key，然后设置环境变量：
-#   PowerShell : $env:DASHSCOPE_API_KEY="sk-xxxx"
-#   CMD        : set DASHSCOPE_API_KEY=sk-xxxx
-#   Bash / zsh : export DASHSCOPE_API_KEY="sk-xxxx"
-#   也可写入本目录的 .env 文件（已在 .gitignore 中，不会被提交）
-DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "").strip()
-if not DASHSCOPE_API_KEY:
-    raise SystemExit(
-        "❌ 未检测到环境变量 DASHSCOPE_API_KEY，服务无法启动。\n"
-        "   请先到阿里云百炼控制台申请 API Key，然后设置环境变量，例如：\n"
-        '     PowerShell : $env:DASHSCOPE_API_KEY="sk-xxxx"\n'
-        '     Bash       : export DASHSCOPE_API_KEY="sk-xxxx"\n'
-        "   设置完成后重新运行 uvicorn。"
-    )
+import logging
+import time
+from io import BytesIO
+from pathlib import Path
+from typing import Any
 
-BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
-VISION_MODEL = "qwen-vl-max"
-LLM_MODEL = "qwen3-max"
+from mova import prompts
+from mova.config import VERSION, ConfigError, load_settings
+from mova.providers import OpenAICompatProvider, ProviderError, extract_json
 
-HEADERS = {
-    "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
-    "Content-Type": "application/json"
-}
-# ---------- 数据模型 ----------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+)
+logger = logging.getLogger("mova.app")
+
+# ---------------------------------------------------------------
+# 启动期配置：缺 Key 就直接给出可执行的提示，而不是等到第一次调用才 500
+# ---------------------------------------------------------------
+try:
+    SETTINGS = load_settings(Path(__file__).with_name(".env"))
+except ConfigError as exc:
+    raise SystemExit(f"\n[Mova-AI] 服务无法启动：\n{exc}\n") from exc
+
+PROVIDER = OpenAICompatProvider(SETTINGS)
+
+#: 端侧执行器尚未接入时，所有请求的路由原因。与客户端 Router 的文案保持一致。
+CLOUD_ONLY_REASON = "端侧执行器未接入，本次直连云端"
+
+app = FastAPI(
+    title="Mova-AI 云端服务",
+    version=VERSION,
+    description=(
+        "移动端场景助手的云侧能力层。"
+        "重推理与长生成在此完成，轻判断与结构化抽取由端侧小模型承担（规划中）。"
+    ),
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=SETTINGS.allow_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ===============================================================
+# 契约
+# ===============================================================
+
 class ReadingTextRequest(BaseModel):
-    content: str
+    content: str = Field(min_length=1, description="待总结的正文")
+
+
 class ChatReplyRequest(BaseModel):
-    context: str
+    context: str = Field(min_length=1, description="对方说的话")
     style: str = "自然"
 
+
 class ChatRewriteRequest(BaseModel):
-    text: str
+    text: str = Field(min_length=1, description="待改写的话")
     style: str = "礼貌"
 
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
 class ChatContextRequest(BaseModel):
-    messages: list
+    messages: list[ChatMessage]
     goal: str = ""
     style: str = "自然"
 
-# ---------- 视觉模型：识别食材 ----------
-def recognize_food(image_bytes: bytes) -> str:
-    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-    payload = {
-        "model": VISION_MODEL ,
-        "messages": [
+
+# ===============================================================
+# 工具
+# ===============================================================
+
+def build_meta(
+    model: str | None,
+    latency_ms: int,
+    *,
+    stages: dict[str, int] | None = None,
+    confidence: float | None = None,
+    route_reason: str = CLOUD_ONLY_REASON,
+) -> dict[str, Any]:
+    """统一构造响应中的 meta 段。全服务只有这一处生产 meta，口径不会漂。"""
+    return {
+        "executor": "cloud",
+        "model": model,
+        "latency_ms": latency_ms,
+        "route_reason": route_reason,
+        "stages": stages or {},
+        "confidence": confidence,
+    }
+
+
+_MAGIC = (
+    (b"\xff\xd8\xff", "image/jpeg", "jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png", "png"),
+    (b"%PDF", "application/pdf", "pdf"),
+)
+
+
+def sniff(data: bytes) -> tuple[str, str] | None:
+    """按魔数判断真实类型，返回 (mime, kind)。"""
+    for magic, mime, kind in _MAGIC:
+        if data.startswith(magic):
+            return mime, kind
+    return None
+
+
+async def read_upload(file: UploadFile, *, allow: tuple[str, ...]) -> tuple[bytes, str]:
+    """读取并校验上传文件。
+
+    刻意不信任客户端的 Content-Type：类型判断以文件头为准，
+    体积上限由配置决定。这两条堵住的是"上传接口无校验"这个经典问题。
+    """
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="上传的文件是空的")
+
+    limit = SETTINGS.max_upload_mb * 1024 * 1024
+    if len(data) > limit:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件超过 {SETTINGS.max_upload_mb} MB 上限（当前 {len(data) / 1024 / 1024:.1f} MB）",
+        )
+
+    sniffed = sniff(data)
+    if sniffed is None:
+        raise HTTPException(
+            status_code=415,
+            detail="无法识别的文件类型（只支持 JPEG / PNG / PDF）",
+        )
+    mime, kind = sniffed
+    if kind not in allow:
+        raise HTTPException(status_code=415, detail=f"不支持的类型：{kind}（需要 {'/'.join(allow)}）")
+    return data, mime
+
+
+def parse_or_fallback(raw: str, fallback: dict[str, Any]) -> dict[str, Any]:
+    """解析模型返回的 JSON；失败时返回兜底结构，保证前端永远拿得到可渲染数据。"""
+    parsed = extract_json(raw)
+    if isinstance(parsed, dict):
+        return parsed
+    logger.warning("模型未返回可解析的 JSON，已启用兜底（长度 %d）", len(raw))
+    return fallback
+
+
+def provider_error(exc: ProviderError) -> HTTPException:
+    """把上游错误映射成对客户端有意义的状态码。"""
+    status = exc.status_code or 502
+    if status in (401, 403):
+        return HTTPException(status_code=502, detail=f"服务端模型鉴权失败：{exc}")
+    if status == 429:
+        return HTTPException(status_code=503, detail="模型服务限流，请稍后重试")
+    return HTTPException(status_code=502, detail=f"模型服务调用失败：{exc}")
+
+
+# ===============================================================
+# 元信息接口
+# ===============================================================
+
+@app.get("/health", summary="健康检查与模型信息")
+async def health() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "version": VERSION,
+        "provider": SETTINGS.provider,
+        "models": {
+            "llm": SETTINGS.llm_model,
+            "vision": SETTINGS.vision_model or "",
+        },
+        "edge": {
+            "deployed": False,
+            "name": None,
+            "size_mb": None,
+            "quantization": None,
+        },
+    }
+
+
+@app.get("/capabilities", summary="能力清单（驱动客户端首页）")
+async def capabilities() -> dict[str, Any]:
+    """客户端首页的能力网格由此驱动，服务端增减场景时 App 不需要发版。"""
+    return {
+        "scenes": [
             {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "请识别图片中的可食用食材，用中文名称，用逗号分隔，不要解释。"
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_b64}"
-                        }
-                    }
-                ]
-            }
+                "id": "food",
+                "name": "做饭助手",
+                "desc": "拍食材，出菜谱",
+                "emoji": "🍜",
+                "available": True,
+                "edge_ready": False,
+            },
+            {
+                "id": "reading",
+                "name": "阅读总结",
+                "desc": "文本 / 图片 / PDF",
+                "emoji": "📄",
+                "available": True,
+                "edge_ready": False,
+            },
+            {
+                "id": "chat",
+                "name": "聊天辅助",
+                "desc": "帮你把话说好",
+                "emoji": "💬",
+                "available": True,
+                "edge_ready": False,
+            },
+            {
+                "id": "location",
+                "name": "位置提示",
+                "desc": "到了超市提醒你",
+                "emoji": "📍",
+                "available": False,
+                "edge_ready": False,
+                "unavailable_hint": "规划中",
+            },
         ]
     }
 
-    resp = requests.post(BASE_URL, headers=HEADERS, json=payload, timeout=30)
-    print("VL status:", resp.status_code)
-    print("VL body:", resp.text)
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail=resp.text)
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
 
-    # 兼容 string 或 list
-    if isinstance(content, list):
-        text = "".join(c.get("text","") for c in content if c.get("type") == "output_text")
-    else:
-        text = content
+# ===============================================================
+# 做饭场景：两级流水线
+# ===============================================================
 
-    return text.strip()
+@app.post("/analyze_image", summary="识别食材并生成菜谱")
+async def analyze_image(file: UploadFile = File(...)) -> dict[str, Any]:
+    """两级串联：视觉模型只负责识别，语言模型只负责生成。
 
-# ---------- LLM：生成菜谱 ----------
-def generate_recipe(ingredients_text: str) -> dict:
-    prompt = f"""
-我现在有这些食材：{ingredients_text}
-请严格返回 JSON，不要解释：
+    拆两级的原因：视觉模型在长输出里容易跑偏，而识别环节的 prompt 可以极简；
+    生成环节拿到干净的食材清单后再做组织，两个环节的失败模式互不污染。
 
-{{
-  "ingredients": [],
-  "dish": "",
-  "steps": ["", "", ""],
-  "tips": ""
-}}
-"""
-
-    payload = {
-        "model": LLM_MODEL,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
-    }
-
-    resp = requests.post(BASE_URL, headers=HEADERS, json=payload, timeout=30)
-
-    print("LLM status:", resp.status_code)
-    print("LLM body:", resp.text)
-
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail=resp.text)
-
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
-
-    if isinstance(content, list):
-        text = "".join(c.get("text","") for c in content if c.get("type") == "output_text")
-    else:
-        text = content
+    meta.stages 会如实返回两段耗时，客户端据此展示"识别中 → 生成中"。
+    """
+    started = time.monotonic()
+    image_bytes, _mime = await read_upload(file, allow=("jpeg", "png"))
+    logger.info("收到食材图片：%s（%d KB）", file.filename, len(image_bytes) // 1024)
 
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return {
-            "ingredients": [ingredients_text],
+        t0 = time.monotonic()
+        ingredients = PROVIDER.chat_vision(prompts.FOOD_RECOGNIZE, image_bytes)
+        recognize_ms = int((time.monotonic() - t0) * 1000)
+        logger.info("识别结果：%s", ingredients[:120])
+
+        t1 = time.monotonic()
+        raw = PROVIDER.chat_text(prompts.recipe_prompt(ingredients))
+        generate_ms = int((time.monotonic() - t1) * 1000)
+    except ProviderError as exc:
+        raise provider_error(exc) from exc
+
+    recipe = parse_or_fallback(
+        raw,
+        {
+            "ingredients": [ingredients],
             "dish": "JSON 解析失败",
-            "steps": [text],
-            "tips": "模型未按 JSON 输出"
-        }
-
-# ---------- 接口：组合两段处理，先识别出菜品，然后再调用大语言模型生成菜谱 ----------
-@app.post("/analyze_image")
-async def analyze_image(file: UploadFile = File(...)):
-    image_bytes = await file.read()
-    print("🚀 进入 analyze_image 接口")
-    print(">>> 收到图片:", file.filename)
-
-    ingredients_text = recognize_food(image_bytes)
-    print(">>> 识别结果:", ingredients_text)
-
-    recipe = generate_recipe(ingredients_text)
-    print(">>> 菜谱结果:", recipe)
+            "steps": [raw],
+            "tips": "模型未按 JSON 输出",
+        },
+    )
 
     return {
         "scene": "food",
-        "ingredients": recipe.get("ingredients", []),
-        "dish": recipe.get("dish", ""),
-        "steps": recipe.get("steps", []),
-        "tips": recipe.get("tips", "")
+        "ingredients": _as_list(recipe.get("ingredients")) or _split_ingredients(ingredients),
+        "dish": str(recipe.get("dish", "") or ""),
+        "steps": _as_list(recipe.get("steps")),
+        "tips": str(recipe.get("tips", "") or ""),
+        "meta": build_meta(
+            f"{SETTINGS.vision_model}+{SETTINGS.llm_model}",
+            int((time.monotonic() - started) * 1000),
+            stages={"recognize": recognize_ms, "generate": generate_ms},
+        ),
     }
 
-def call_qwen_text(prompt: str) -> str:
-    """调用千问文本模型，返回纯文本回答"""
-    payload = {
-        "model": LLM_MODEL,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
-    }
-    resp = requests.post(BASE_URL, headers=HEADERS, json=payload, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
-    if isinstance(content, list):
-        text = "".join(c.get("text", "") for c in content if c.get("type") == "output_text")
-    else:
-        text = content
-    return text
 
+# ===============================================================
+# 阅读场景：三种输入，同一套输出契约
+# ===============================================================
 
-#文本输入：/reading/text
-@app.post("/reading/text")
-async def reading_text(req: ReadingTextRequest):
-    prompt = f"""
-    你是一个专业的中文阅读理解助手，请认真阅读以下内容：
-
-    ----------------
-    {req.content}
-    ----------------
-
-    请你用【JSON 格式】返回以下结构（严格返回 JSON，不要多余解释）：
-
-    {{
-      "summary": "用不超过5句话总结全文",
-      "key_points": ["列出3~5条重点"],
-      "difficulty": "简单 / 中等 / 偏难",
-      "qa_suggestion": "给出一个适合继续追问的问题，例如：作者观点是否存在争议？"
-    }}
-    """
-
-    text = call_qwen_text(prompt)
-
-    # 让模型直接返回 JSON 格式，我们解析一下
+@app.post("/reading/text", summary="总结文本")
+async def reading_text(req: ReadingTextRequest) -> dict[str, Any]:
+    started = time.monotonic()
     try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        # 模型没按 JSON 返回，就包一层兜底
-        data = {
-            "summary": text,
-            "key_points": [],
-            "qa_suggestion": ""
-        }
+        raw = PROVIDER.chat_text(prompts.reading_text_prompt(req.content))
+    except ProviderError as exc:
+        raise provider_error(exc) from exc
 
+    data = parse_or_fallback(raw, {"summary": raw, "key_points": [], "qa_suggestion": ""})
     return {
         "scene": "reading_text",
-        **data
+        **_reading_payload(data),
+        "meta": build_meta(SETTINGS.llm_model, int((time.monotonic() - started) * 1000)),
     }
 
-#理解截图/图片：/reading/image（用 Qwen-VL）
-def call_qwen_vl_for_reading(image_bytes: bytes) -> str:
-    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    payload = {
-        "model": VISION_MODEL,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "请阅读图片中显示的内容（比如网页、App、文章等），用中文帮我做一份简明扼要的总结，并输出 JSON：{\"summary\":...,\"key_points\":[...],\"qa_suggestion\":...}。"
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_b64}"
-                        }
-                    }
-                ]
-            }
-        ]
-    }
-
-    resp = requests.post(BASE_URL, headers=HEADERS, json=payload, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
-    if isinstance(content, list):
-        text = "".join(c.get("text", "") for c in content if c.get("type") == "output_text")
-    else:
-        text = content
-    return text
-@app.post("/reading/image")
-async def reading_image(file: UploadFile = File(...)):
-    image_bytes = await file.read()
-
-    text = call_qwen_vl_for_reading(image_bytes)
-
+@app.post("/reading/image", summary="总结截图")
+async def reading_image(file: UploadFile = File(...)) -> dict[str, Any]:
+    started = time.monotonic()
+    image_bytes, _mime = await read_upload(file, allow=("jpeg", "png"))
     try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        data = {
-            "summary": text,
-            "key_points": [],
-            "qa_suggestion": ""
-        }
+        raw = PROVIDER.chat_vision(prompts.READING_IMAGE, image_bytes)
+    except ProviderError as exc:
+        raise provider_error(exc) from exc
 
+    data = parse_or_fallback(raw, {"summary": raw, "key_points": [], "qa_suggestion": ""})
     return {
         "scene": "reading_image",
-        **data
+        **_reading_payload(data),
+        "meta": build_meta(SETTINGS.vision_model, int((time.monotonic() - started) * 1000)),
     }
 
-#阅读PDF：/reading/pdf
-@app.post("/reading/pdf")
-async def reading_pdf(file: UploadFile = File(...)):
-    # 读入 PDF 内容
-    pdf_bytes = await file.read()
 
-    # 用 PdfReader 从内存打开
-    from io import BytesIO
-    reader = PdfReader(BytesIO(pdf_bytes))
+@app.post("/reading/pdf", summary="总结 PDF 前若干页")
+async def reading_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
+    started = time.monotonic()
+    pdf_bytes, _mime = await read_upload(file, allow=("pdf",))
 
-    max_pages = min(3, len(reader.pages))  # 先只看前 3 页
-    texts = []
-    for i in range(max_pages):
-        page = reader.pages[i]
-        texts.append(page.extract_text() or "")
-
-    full_text = "\n\n".join(texts)
-
-    prompt = f"""
-你是一个 PDF 阅读助手。下面是文档前 {max_pages} 页的文字内容，请帮我做一个整体阅读理解总结。
-
-正文内容如下（可能比较长）：
-
-{full_text}
-
-请用 JSON 返回：
-{{
-  "summary": "几句话总结整段内容",
-  "key_points": ["要点1", "要点2", "要点3"],
-  "qa_suggestion": "给出一条适合继续提问的问题"
-}}
-只输出 JSON。
-"""
-    text = call_qwen_text(prompt)
+    from pypdf import PdfReader  # 延迟导入：只有这条路径才需要
 
     try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        data = {
-            "summary": text,
-            "key_points": [],
-            "qa_suggestion": ""
-        }
+        reader = PdfReader(BytesIO(pdf_bytes))
+        max_pages = min(SETTINGS.max_pdf_pages, len(reader.pages))
+        full_text = "\n\n".join((reader.pages[i].extract_text() or "") for i in range(max_pages))
+    except Exception as exc:  # pypdf 对损坏文件会抛各种异常
+        logger.warning("PDF 解析失败：%s", exc)
+        raise HTTPException(status_code=422, detail="PDF 解析失败，文件可能已损坏或受密码保护") from exc
 
+    if not full_text.strip():
+        raise HTTPException(status_code=422, detail="这个 PDF 没有可提取的文字（可能是扫描件，请改用截图识别）")
+
+    try:
+        raw = PROVIDER.chat_text(prompts.reading_pdf_prompt(full_text, max_pages))
+    except ProviderError as exc:
+        raise provider_error(exc) from exc
+
+    data = parse_or_fallback(raw, {"summary": raw, "key_points": [], "qa_suggestion": ""})
     return {
         "scene": "reading_pdf",
         "page_count": max_pages,
-        **data
+        **_reading_payload(data),
+        "meta": build_meta(SETTINGS.llm_model, int((time.monotonic() - started) * 1000)),
     }
 
-# 一句话智能回复
-@app.post("/chat/reply")
-async def chat_reply(req: ChatReplyRequest):
-    prompt = f"""
-你是一个中文聊天助手，根据对话帮我生成合适回复。
 
-对方说的话：
-{req.context}
+# ===============================================================
+# 聊天辅助
+# ===============================================================
 
-要求：
-- 回复风格：{req.style}
-- 给出1条推荐回复
-- 给出2条备选回复
-- 简要说明为什么这样回
+@app.post("/chat/reply", summary="生成一条回复建议")
+async def chat_reply(req: ChatReplyRequest) -> dict[str, Any]:
+    return await _chat(
+        prompts.chat_reply_prompt(req.context, req.style), "chat", req.style
+    )
 
-用JSON返回：
-{{
-  "reply": "",
-  "style": "{req.style}",
-  "alternatives": ["",""],
-  "explain": ""
-}}
-只输出JSON。
-"""
-    text = call_qwen_text(prompt)
+
+@app.post("/chat/rewrite", summary="改写语气")
+async def chat_rewrite(req: ChatRewriteRequest) -> dict[str, Any]:
+    return await _chat(
+        prompts.chat_rewrite_prompt(req.text, req.style), "chat_rewrite", req.style
+    )
+
+
+@app.post("/chat/context", summary="基于多轮上下文生成回复")
+async def chat_context(req: ChatContextRequest) -> dict[str, Any]:
+    if not req.messages:
+        raise HTTPException(status_code=422, detail="messages 不能为空")
+    dialogue = "\n".join(f"{m.role}：{m.content}" for m in req.messages)
+    return await _chat(
+        prompts.chat_context_prompt(dialogue, req.goal, req.style), "chat_context", req.style
+    )
+
+
+async def _chat(prompt: str, scene: str, style: str) -> dict[str, Any]:
+    started = time.monotonic()
     try:
-        data = json.loads(text)
-    except:
-        data = {"reply": text, "style": req.style, "alternatives": [], "explain": ""}
-    return {"scene": "chat", **data}
-# 语气风格改写（更礼貌/更幽默/更商务）
-@app.post("/chat/rewrite")
-async def chat_rewrite(req: ChatRewriteRequest):
-    prompt = f"""
-请把下面这句话改写为“{req.style}”风格：
+        raw = PROVIDER.chat_text(prompt, temperature=0.6)
+    except ProviderError as exc:
+        raise provider_error(exc) from exc
 
-原句：{req.text}
+    data = parse_or_fallback(
+        raw, {"reply": raw, "style": style, "alternatives": [], "explain": ""}
+    )
+    return {
+        "scene": scene,
+        "reply": str(data.get("reply", "") or ""),
+        "style": str(data.get("style", style) or style),
+        "alternatives": _as_list(data.get("alternatives")),
+        "explain": str(data.get("explain", "") or ""),
+        "meta": build_meta(SETTINGS.llm_model, int((time.monotonic() - started) * 1000)),
+    }
 
-要求：
-- 不改变原意
-- 更符合社交表达习惯
 
-用JSON返回：
-{{
-  "reply": "",
-  "style": "{req.style}",
-  "alternatives": ["",""],
-  "explain": ""
-}}
-只输出JSON。
-"""
-    text = call_qwen_text(prompt)
-    try:
-        data = json.loads(text)
-    except:
-        data = {"reply": text, "style": req.style, "alternatives": [], "explain": ""}
-    return {"scene": "chat_rewrite", **data}
-# 看懂上下文（基于最近多轮）
-@app.post("/chat/context")
-async def chat_context(req: ChatContextRequest):
-    dialogue = "\n".join([f"{m['role']}：{m['content']}" for m in req.messages])
+# ===============================================================
+# 小工具
+# ===============================================================
 
-    prompt = f"""
-你是一个聊天助手，请基于以下对话历史，生成下一句合适回复：
+def _as_list(value: Any) -> list[str]:
+    """把模型返回的任意结构归一化成字符串列表（有时会给字符串而不是数组）。"""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value).strip()
+    return [text] if text else []
 
-对话记录：
-{dialogue}
 
-目标：{req.goal}
-风格：{req.style}
+def _split_ingredients(text: str) -> list[str]:
+    """视觉模型有时返回"番茄，鸡蛋"这种一行文本，这里兜底切开。"""
+    for separator in ("，", ",", "、"):
+        if separator in text:
+            return [part.strip() for part in text.split(separator) if part.strip()]
+    return [text.strip()] if text.strip() else []
 
-请返回JSON：
-{{
-  "reply": "",
-  "style": "{req.style}",
-  "alternatives": ["",""],
-  "explain": ""
-}}
-只输出JSON。
-"""
-    text = call_qwen_text(prompt)
-    try:
-        data = json.loads(text)
-    except:
-        data = {"reply": text, "style": req.style, "alternatives": [], "explain": ""}
-    return {"scene": "chat_context", **data}
+
+def _reading_payload(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "summary": str(data.get("summary", "") or ""),
+        "key_points": _as_list(data.get("key_points")),
+        "difficulty": data.get("difficulty") or None,
+        "qa_suggestion": data.get("qa_suggestion") or None,
+    }

@@ -1,7 +1,12 @@
 # ============================================================
-# SCENE-AI 云端服务依赖清单
+# Mova-AI 云端服务依赖
+#
 # 安装：pip install -r requirements.txt
-# 运行：uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+# 启动：uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+#
+# 这里只包含**在线服务**的依赖。
+# 离线流水线（数据构造 / 蒸馏 / 量化 / 评测）见 requirements-train.txt，
+# 分开的原因：在线服务要部署在轻量服务器上，不该被迫安装 PyTorch。
 # ============================================================
 
 # ---------- Web 框架 ----------
@@ -12,10 +17,9 @@ uvicorn[standard]>=0.27
 python-multipart>=0.0.9
 
 # ---------- 数据校验 ----------
-# app.py 使用了 list 等内建泛型标注，需要 Python 3.9+
 pydantic>=2.5
 
-# ---------- 调用 DashScope（阿里云百炼）兼容模式 API ----------
+# ---------- 模型调用（OpenAI 兼容协议，DashScope / DeepSeek / 自建 vLLM 通用） ----------
 requests>=2.31
 
 # ---------- PDF 文本抽取 ----------
