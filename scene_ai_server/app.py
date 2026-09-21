@@ -290,9 +290,9 @@ async def analyze_image(file: UploadFile = File(...)) -> dict[str, Any]:
     return {
         "scene": "food",
         "ingredients": _as_list(recipe.get("ingredients")) or _split_ingredients(ingredients),
-        "dish": str(recipe.get("dish", "") or ""),
+        "dish": _as_text(recipe.get("dish")),
         "steps": _as_list(recipe.get("steps")),
-        "tips": str(recipe.get("tips", "") or ""),
+        "tips": _as_text(recipe.get("tips")),
         "meta": build_meta(
             f"{SETTINGS.vision_model}+{SETTINGS.llm_model}",
             int((time.monotonic() - started) * 1000),
@@ -410,10 +410,10 @@ async def _chat(prompt: str, scene: str, style: str) -> dict[str, Any]:
     )
     return {
         "scene": scene,
-        "reply": str(data.get("reply", "") or ""),
-        "style": str(data.get("style", style) or style),
+        "reply": _as_text(data.get("reply")),
+        "style": _as_text(data.get("style")) or style,
         "alternatives": _as_list(data.get("alternatives")),
-        "explain": str(data.get("explain", "") or ""),
+        "explain": _as_text(data.get("explain")),
         "meta": build_meta(SETTINGS.llm_model, int((time.monotonic() - started) * 1000)),
     }
 
@@ -422,12 +422,49 @@ async def _chat(prompt: str, scene: str, style: str) -> dict[str, Any]:
 # 小工具
 # ===============================================================
 
+def _as_text(value: Any) -> str:
+    """把模型返回的任意结构归一化成一段纯文本。
+
+    ⚠️ 这个函数是实测逼出来的：第一次跑通阅读场景时，qwen3-max 把 summary
+    返回成了**数组**（`{"summary": ["端侧部署…", "第二个要点…"]}`），
+    而旧代码写的是 `str(data.get("summary", ""))`，于是界面上直接显示了
+    Python 列表的 repr —— 用户看到的"摘要"是一段带方括号和引号的 JSON。
+
+    教训：模型对"字符串"和"字符串数组"的选择是不稳定的，
+    契约校验只保证了顶层 JSON 合法，管不到字段的形态。
+    归一化必须覆盖 str / list / dict 三种情况。
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return "".join(_as_text(item) for item in value)
+    if isinstance(value, dict):
+        return " ".join(_as_text(item) for item in value.values())
+    return str(value).strip()
+
+
 def _as_list(value: Any) -> list[str]:
-    """把模型返回的任意结构归一化成字符串列表（有时会给字符串而不是数组）。"""
+    """把模型返回的任意结构归一化成字符串列表（会展开一层嵌套）。
+
+    同样来自实测：模型有时给 `["要点1", "要点2"]`，有时给 `"要点1，要点2"`，
+    偶尔给 `[["要点1"], ["要点2"]]`。
+    """
     if value is None:
         return []
     if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
+        result: list[str] = []
+        for item in value:
+            if isinstance(item, (list, dict)):
+                result.extend(_as_list(item))
+            else:
+                text = str(item).strip()
+                if text:
+                    result.append(text)
+        return result
+    if isinstance(value, dict):
+        return [text for text in (_as_text(item) for item in value.values()) if text]
     text = str(value).strip()
     return [text] if text else []
 
@@ -442,8 +479,8 @@ def _split_ingredients(text: str) -> list[str]:
 
 def _reading_payload(data: dict[str, Any]) -> dict[str, Any]:
     return {
-        "summary": str(data.get("summary", "") or ""),
+        "summary": _as_text(data.get("summary")),
         "key_points": _as_list(data.get("key_points")),
-        "difficulty": data.get("difficulty") or None,
-        "qa_suggestion": data.get("qa_suggestion") or None,
+        "difficulty": _as_text(data.get("difficulty")) or None,
+        "qa_suggestion": _as_text(data.get("qa_suggestion")) or None,
     }
