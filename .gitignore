@@ -1,5 +1,7 @@
 # ==================== Android / Gradle ====================
 .gradle/
+# 本地隔离的 Gradle 家目录（依赖缓存 / wrapper 发行版），仅用于本机离线构建
+.gradle-home/
 build/
 captures/
 .externalNativeBuild/
@@ -36,7 +38,12 @@ env/
 .pytest_cache/
 
 # ==================== 密钥与本地配置 ====================
-# 切勿把真实的 DashScope / 大模型 API Key 提交上去
+# 切勿把真实的 DashScope / DeepSeek API Key 提交上去
 .env
 .env.local
 config.local.*
+
+# ==================== 数据流水线的中间产物 ====================
+# 标注缓存体积大且可重新生成（重跑不会重复消耗 API 额度），不入库。
+# 最终数据集 / 评测集 / 报告**会**入库 —— 它们是流水线确实跑过的证据。
+scene_ai_server/data/cache/

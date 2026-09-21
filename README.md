@@ -1,259 +1,245 @@
-# SCENE-AI · 移动 AI 生活助手
+# Mova-AI · 移动端主动智能助手
 
-> **Mova-AI** · 一款运行在 Android 手机上的**场景触发式 AI 助手**：感知你正在做什么，在最合适的时刻主动提供 AI 服务，实现"**无需唤醒、无需搜索**"的随身智能体验。
+> **不是等你开口，而是在你需要的那一刻，刚好出现。**
+>
+> 一个把**云端大模型的场景理解能力蒸馏进端侧小模型**、并基于**校准置信度做端云级联推理**的 Android 智能助手。
 
-[![Android](https://img.shields.io/badge/Android-minSdk%2024%20%7C%20targetSdk%2036-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
-[![Java](https://img.shields.io/badge/Java-11-007396?logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Android](https://img.shields.io/badge/Android-minSdk%2026%20%7C%20targetSdk%2036-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
+[![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Model](https://img.shields.io/badge/Model-Qwen--VL--Max%20%2B%20Qwen3--Max-615CED)](https://bailian.console.aliyun.com/)
-[![Arch](https://img.shields.io/badge/Architecture-端云协同-2E7D32)](#系统架构)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Arch](https://img.shields.io/badge/Architecture-端云级联路由-2E7D32)](#系统架构)
 
 ---
 
-## 📖 项目简介
+## 一、这个项目和"调个大模型 API"的区别
 
-手机里的 AI 助手大多是"**你问它才答**"——要先打开 App、先想好怎么问、再等它回。SCENE-AI 想反过来：**让 AI 自己判断该不该出现**。
+市面上的 AI 助手大多是「**你问它才答**」：先打开 App、先想好怎么问、再等它回。Mova-AI 想反过来 —— **让 AI 自己判断该不该出现**。
 
-项目通过感知用户所处场景（摄像头画面 / 当前使用的 App / 时间 / 位置），在最合适的时机主动提供帮助。例如：
+它要回答的不是"怎么把请求发给大模型"，而是移动端 AI 的三个真问题：
 
-- 你在厨房对着食材举起手机 → 自动识别食材 → 直接给出**能做哪道菜、怎么做**
-- 你在微信里纠结怎么回一条消息 → 自动弹出浮层，给**推荐话术 + 备选方案 + 为什么这么回**
-- 你在看一篇长文章或 PDF → 自动给出**摘要、要点和可继续追问的问题**
+| 真问题 | Mova-AI 的回答 |
+|---|---|
+| **什么时候该出现？** | 把「要不要打扰用户」建模成**带代价的序列决策**，用上下文老虎机在线学习，而不是写死规则 |
+| **端侧小模型能扛多少？** | 定义**能力契约**：端侧只学「场景判断 → 意图分类 → 难度评估 → 路由建议 → 槽位抽取」，长生成与复杂推理上云 |
+| **什么时候必须上云？** | 把路由写成**代价敏感决策**：端侧省下的毫秒，折算成可接受的精度损失 |
 
-**产品定位**：生活场景优先，而不是又一个学习工具。
+### 和普通套壳应用的正面对比
 
-### 核心思路：AI 的价值不只在模型，而在"何时出现"
-
-| 对比维度 | 普通工具型 AI | SCENE-AI |
-| --- | --- | --- |
-| 触发方式 | 用户主动打开、主动提问 | ✅ **场景感知自动触发** |
-| 交互成本 | 切 App → 组织语言 → 等待 | ✅ 抬手即用，结果直出 |
-| 能力组织 | 一个通用对话框 | ✅ 按生活场景分工的**场景调度器** |
-| 结果形态 | 一段自由文本 | ✅ **强约束 JSON**，前端可结构化渲染 |
-| 架构 | 纯端侧 或 纯云端 | ✅ **端云协同**：端做感知与调度，云做重模型推理 |
+| 维度 | 普通 AI 应用 | Mova-AI |
+|---|---|---|
+| 模型来源 | 调 API | 云端大模型当教师 → **蒸馏出端侧小模型** → 量化部署 |
+| 端侧能力 | 无（断网即废） | 端侧模型承担感知、判断与结构化抽取 |
+| 端云分工 | 无（全走云端） | **代价敏感级联路由**，按置信度动态决策 |
+| 路由依据 | `if (复杂) 上云` | 校准后的置信度 + 实测标定的延迟/代价权重 |
+| 输出可靠性 | 靠 prompt 祈祷 JSON | **语法约束解码 + 槽位校验**，失败自动升级 |
+| 可解释性 | 黑箱 | 每次决策都能回答"为什么走了云端" |
 
 ---
 
-## 🏗️ 系统架构
+## 二、系统架构
 
 ```
-┌─────────────────────────── Android 端（SceneAi_App）───────────────────────────┐
-│                                                                               │
-│  系统状态 / 摄像头 / 位置 / 当前 App                                            │
-│            ↓                                                                  │
-│  场景判断模块（本地）                                                          │
-│            ↓                                                                  │
-│  场景调度器  ──  决定"此刻该不该调用 AI、调用哪个能力"                          │
-│            ↓                                                                  │
-│  OkHttp 发起请求（multipart 上传图片 / JSON 提交文本）                          │
-│            ↓                                                                  │
-│  结果解析（org.json）                                                          │
-│            ↓                                                                  │
-│  Toast / 浮窗 / 页面展示                                                       │
-│                                                                               │
-└───────────────────────────────────┬───────────────────────────────────────────┘
-                                    │  HTTP（当前为明文，开发期用）
+┌──────────────────────────── 端侧（Android · SceneAi_App）────────────────────────────┐
+│                                                                                       │
+│  感知层   相机 / 前台 App / 时间 / 位置 / 运动状态 / 网络状态                            │
+│     ↓                                                                                 │
+│  触发层   P(此刻需要 | 信号) × 上下文老虎机 × 打扰成本 → 要不要出现                      │
+│     ↓                                                                                 │
+│  推理层   视觉轻量分类器 ──┐                                                          │
+│          端侧 SLM（INT4）─┴─ 统一 Executor 接口                                        │
+│     ↓                                                                                 │
+│  路由层   置信度校准 → 代价敏感决策 → 语法约束解码 → 槽位校验 → 不够就升级云端           │
+│     ↓                                                                                 │
+│  交互层   结构化结果 / 「为什么现在出现」信号卡 / 技术面板 / 反馈回灌                     │
+│                                                                                       │
+└───────────────────────────────────┬───────────────────────────────────────────────────┘
+                                    │  HTTP + 契约化 JSON（含 meta：执行方式/耗时/路由原因）
                                     ▼
-┌─────────────────────────── 云端（scene_ai_server）───────────────────────────┐
-│                                                                               │
-│  FastAPI  ──  /analyze_image   /reading/*   /chat/*                            │
-│      ↓                                                                        │
-│  Prompt 构建 + 模型路由                                                        │
-│      ├── qwen-vl-max   多模态视觉模型（认食材、读图）                           │
-│      └── qwen3-max     大语言模型（生成菜谱、总结、话术）                       │
-│      ↓                                                                        │
-│  结构化结果（强制 JSON + 解析兜底）                                             │
-│                                                                               │
-└───────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────── 云侧（scene_ai_server · FastAPI）────────────────────────┐
+│  在线服务   /health  /capabilities  /analyze_image  /reading/*  /chat/*                │
+│             Provider 抽象：DashScope ⇄ DeepSeek ⇄ 任意 OpenAI 兼容端点                 │
+│  离线流水线 数据引擎 → 三信号难度评估 → 去重 → 子模覆盖优化 → 配比求解                   │
+│             → Response / Logit / Feature 三层蒸馏 → 分层量化 → 端侧模型产物             │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+                          ▲
+                          │  教师模型（自托管，承担 Teacher / Judge / Generator / 难度估计）
 ```
+
+### 一条设计原则：端侧与云侧实现同一个 `Executor` 接口
+
+路由层不关心谁是本地谁是远程。好处是：加新执行器（比如 NPU 加速版）不改路由代码；评测时可以把云端换成 mock 做离线消融；端侧还没训好时挂一个"永远失败"的桩，就能先验证降级逻辑。
 
 ---
 
-## 🧰 技术栈
+## 三、界面：为新用户设计，而不是为演示设计
+
+**"友好"被拆成了 8 条可验收的标准**（详见 [`docs/03-UI-UX设计规范.md`](docs/03-UI-UX设计规范.md)）：
+
+| # | 标准 | 做法 |
+|---|---|---|
+| 1 | 首启最多 3 步进主界面 | 价值说明 → 权限 → 连接配置，每步都可跳过 |
+| 2 | 用户不需要想"输入什么" | 每个能力页都有**一键示例**（做饭内置示例图、阅读内置范文、聊天内置场景） |
+| 3 | 空状态有明确下一步 | 插图 + 一句话 + 一个按钮 |
+| 4 | 错误能自己解决 | 严格「发生了什么 / 为什么 / 怎么办」三件套 + 可点的出路 |
+| 5 | 结果能拿走 | 所有结果卡都有复制按钮 |
+| 6 | 权限有理由 | 授权前说清"用来做什么" |
+| 7 | 长内容不被截断 | 全面废弃 Toast，改为结构化结果卡 |
+| 8 | 高级能力不吓人 | 技术面板独立成一级入口，主流程零术语 |
+
+### 页面清单
+
+| 页面 | 说明 |
+|---|---|
+| 首启向导 | 3 屏，含**连接检测**（失败时给出排查清单）与"演示模式"兜底 |
+| 首页 | 连接状态卡 → 主动智能总开关 → 场景能力网格 → 今日端云概览 |
+| 做饭助手 | 拍照（**全分辨率**）/ 相册 / 试试示例 → 阶段化加载（识别→生成）→ 菜谱卡 |
+| 阅读总结 | 文本 / 截图 / PDF 三 tab，**同一套输出契约**，结果卡只写一份 |
+| 聊天辅助 | 风格 chips + 目标 chips + 可展开多轮上下文 → 推荐回复 / 备选 / 为什么这样回 |
+| 记录 | 按场景筛选，每条带**端侧/云端徽标**，可点进详情 |
+| 技术面板 | 会话统计、延迟拆解、端侧模型状态、最近请求与**路由原因**、导出日志 |
+| 设置 | 服务连接、主动智能（免打扰/敏感度）、端侧、外观、数据、关于 |
+
+> 技术面板刻意做成一级入口：它同时服务两类读者 —— 用户看"AI 做了什么决定"，面试官看"这个项目有什么技术含量"。
+
+---
+
+## 四、技术栈
 
 **Android 端（`SceneAi_App/`）**
 
-| 项 | 选型 |
-| --- | --- |
-| 语言 | **Java 11**（`MainActivity.java`） |
-| 构建 | Gradle **Kotlin DSL** + Version Catalog（`libs.versions.toml`），AGP **8.13.1** |
-| SDK | `minSdk 24` / `targetSdk 36` / `compileSdk 36` |
-| 网络 | **OkHttp 4.10.0**（multipart 上传） |
-| UI | AppCompat + Material + ConstraintLayout |
-| 相机 | 系统相机 `MediaStore.ACTION_IMAGE_CAPTURE`（方案中规划 CameraX） |
-| JSON | `org.json` |
+| 项 | 选型 | 为什么 |
+|---|---|---|
+| 语言 | **Kotlin 2.1** | 协程 + 密封类，适合表达"加载/成功/失败/降级"状态机 |
+| UI | **Jetpack Compose + Material 3** | 多页面 + 动态状态（阶段化加载、降级横幅）代码量远低于 XML |
+| 导航 | Navigation Compose | 单 Activity，路由集中声明 |
+| 状态 | ViewModel + StateFlow | 单向数据流，UI 只渲染 UiState |
+| 网络 | Retrofit + OkHttp + kotlinx.serialization | 与后端契约一一对应，编译期强类型 |
+| 本地存储 | DataStore(Preferences) + JSON 文件 | 设置用 DataStore；历史记录量小（≤200 条），用文件省掉 Room 的注解处理器 |
+| 依赖注入 | 手写 `AppContainer` | 依赖图只有 4 个对象，比引入 Hilt 更透明、编译更快 |
+| 构建 | Gradle 8.13 + AGP 8.13.1 + Version Catalog | 版本集中管理 |
 
-**云端（`scene_ai_server/`）**
+**云侧（`scene_ai_server/`）**
 
-| 项 | 选型 |
-| --- | --- |
-| Web 框架 | **FastAPI** + Uvicorn |
-| 数据校验 | Pydantic（`BaseModel` 定义请求体） |
-| 大模型 | 阿里云百炼 **DashScope 兼容模式 API** |
-| 视觉模型 | `qwen-vl-max` |
-| 语言模型 | `qwen3-max` |
-| PDF 解析 | `pypdf`（内存中读取，取前 3 页） |
-| HTTP 客户端 | `requests` |
-
----
-
-## 📂 目录结构
-
-```
-移动AI生活助手/
-│
-├── scene_ai_server/                        # 🐍 云端 AI 服务（FastAPI）
-│   ├── app.py                              # ⭐ 服务主体：7 个接口 + Prompt 构建 + 模型调用
-│   ├── requirements.txt                    # Python 依赖
-│   ├── test_vl.py                          # 冒烟测试：单独验证 qwen-vl-max 认图
-│   ├── test_qwen.py                        # 冒烟测试：单独验证 qwen3-max 文本对话
-│   ├── tomato.jpg                          # 测试用食材图
-│   ├── SCENE-AI：基于多模态感知的智能场景触发式移动助手系统开发方案.md   # 总体设计文档
-│   └── 聊天场景模块创新点及UI介绍.md        # 聊天模块创新点与 UI 设计说明
-│
-├── SceneAi_App/                            # 📱 Android 客户端
-│   ├── app/
-│   │   ├── build.gradle.kts                # 模块构建脚本（依赖、SDK 版本）
-│   │   ├── proguard-rules.pro
-│   │   └── src/main/
-│   │       ├── AndroidManifest.xml         # 权限：INTERNET / CAMERA / SYSTEM_ALERT_WINDOW
-│   │       ├── java/com/example/scene_ai_app/
-│   │       │   └── MainActivity.java       # ⭐ 拍照 → 上传 → 解析 JSON → 展示菜谱
-│   │       └── res/
-│   │           ├── layout/activity_main.xml        # 首页：一个「拍照并上传」按钮
-│   │           ├── xml/network_security_config.xml # 允许明文 HTTP（开发用）
-│   │           └── values/ · mipmap-*/             # 主题、颜色、图标
-│   ├── gradle/libs.versions.toml           # 依赖版本集中管理
-│   ├── gradle/wrapper/                     # Gradle Wrapper（8.13）
-│   ├── build.gradle.kts · settings.gradle.kts · gradle.properties
-│   └── gradlew · gradlew.bat
-│
-├── .gitignore
-└── README.md
-```
-
-> 📌 `SceneAi_App/local.properties`（记录本机 Android SDK 路径）与所有 `build/`、`.gradle/` 编译产物**均已被忽略，未上传**。
+| 项 | 选型 | 为什么 |
+|---|---|---|
+| 框架 | FastAPI + Pydantic | 契约即代码，自动生成 OpenAPI |
+| 模型调用 | **只实现一次 OpenAI 兼容协议** | DashScope 兼容模式 / DeepSeek / 自建 vLLM 都说这套协议，一个类覆盖三家 |
+| 容错 | 指数退避重试 + JSON 多层兜底提取 | 小模型不按格式返回是常态，在解析层尽量救回来 |
+| 上传校验 | **魔数嗅探**而非信任 Content-Type | 堵住"上传接口无校验"这个经典问题 |
+| 可观测 | 每个响应带 `meta`（执行方式/模型/耗时/阶段拆解/路由原因） | App 技术面板的唯一数据源 |
 
 ---
 
-## 🚀 快速开始
+## 五、快速开始
 
-### 一、启动云端服务
+### 第 1 步：启动云端服务
 
 ```bash
 cd scene_ai_server
 pip install -r requirements.txt
 ```
 
-**必须先配置模型 API Key**（源码中不含任何密钥）。到[阿里云百炼控制台](https://bailian.console.aliyun.com/)申请 API Key 后设置环境变量：
+配置 API Key（**源码中不含任何密钥**）。复制模板后填入：
 
 ```powershell
-# PowerShell（当前窗口有效）
-$env:DASHSCOPE_API_KEY="sk-你的Key"
-
-# PowerShell（永久写入用户环境变量，需重开终端）
-[Environment]::SetEnvironmentVariable("DASHSCOPE_API_KEY","sk-你的Key","User")
+Copy-Item .env.example .env      # PowerShell
+# cp .env.example .env           # Bash
 ```
 
-```bash
-# CMD
-set DASHSCOPE_API_KEY=sk-你的Key
+编辑 `.env`，至少填一个 Key：
 
-# Bash / zsh
-export DASHSCOPE_API_KEY="sk-你的Key"
+```ini
+MOVA_PROVIDER=dashscope
+DASHSCOPE_API_KEY=sk-你的Key
+# 也可以切成 DeepSeek：
+# MOVA_PROVIDER=deepseek
+# DEEPSEEK_API_KEY=sk-你的Key
 ```
 
-启动服务（**端口必须是 8000**，与 Android 端硬编码的 `BASE_URL` 一致）：
+也可以不用 `.env`，直接设置环境变量（`DASHSCOPE_API_KEY` / `DEEPSEEK_API_KEY` / `MOVA_API_KEY`）。
+
+启动（**端口必须是 8000**，与 App 默认地址一致）：
 
 ```bash
 uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-启动后可访问交互式接口文档：**http://localhost:8000/docs**
+- 交互式文档：**http://localhost:8000/docs**
+- 健康检查：**http://localhost:8000/health**（首启向导的「检测连接」就是打这个）
 
-> ⚠️ 若端口改成别的（如 9100），必须同步修改 `MainActivity.java` 中的 `BASE_URL`，否则 App 一定连不上。
+### 第 2 步：编译运行 Android 端
 
-### 二、编译运行 Android 端
+1. 用 **Android Studio** 打开 `SceneAi_App/` 目录（**不是仓库根目录**）
+2. 确认 **JDK 17+**（JDK 21 已验证）
+3. 连接真机或模拟器，点击 Run
 
-1. 用 **Android Studio** 打开 `SceneAi_App/` 目录（不是仓库根目录）
-2. 首次打开时 Studio 会自动生成 `local.properties` 并指向你的 SDK
-3. 确认 **JDK 11+**，Gradle 版本 ≥ 8.13
-4. 连接模拟器或真机，点击 Run
+命令行构建：
 
-### 三、配置联调地址
-
-`MainActivity.java` 中的地址需要按调试方式切换：
-
-```java
-// 模拟器：10.0.2.2 是 Android 模拟器访问「宿主机 localhost」的固定别名
-private static final String BASE_URL = "http://10.0.2.2:8000/analyze_image";
-
-// 真机调试：改成电脑的局域网 IP（ipconfig 查询），并保证手机与电脑同一网段
-// private static final String BASE_URL = "http://192.168.x.x:8000/analyze_image";
+```powershell
+cd SceneAi_App
+$env:JAVA_HOME = "你的 JDK 路径"
+.\gradlew.bat :app:assembleDebug
 ```
 
-由于服务以 `--host 0.0.0.0` 启动，真机可直接通过局域网 IP 访问；服务端当前**未配置 CORS**，但不影响原生 App 调用。
+产物：`app/build/outputs/apk/debug/app-debug.apk`
 
-### 四、冒烟测试（可选）
+### 第 3 步：配置联调地址
 
-想先确认 Key 和网络是否通，可以跳过 App，单独跑两个测试脚本：
+App 内可以随时改：**设置 → 服务连接**，或**首启向导第 3 屏**点「检测连接」。
+
+| 调试方式 | 地址 |
+|---|---|
+| 模拟器 | `http://10.0.2.2:8000/`（10.0.2.2 是模拟器访问宿主机 localhost 的固定别名） |
+| 真机 | `http://电脑的局域网IP:8000/`（`ipconfig` 查询，手机与电脑须同一网段） |
+
+服务以 `--host 0.0.0.0` 启动，真机可直接通过局域网 IP 访问。
+
+### 第 4 步（可选）：跑一遍数据引擎
+
+不需要显卡，也不需要安装任何第三方包 —— 数据引擎只用 Python 标准库：
 
 ```bash
 cd scene_ai_server
-python test_qwen.py    # 验证 qwen3-max 文本调用
-python test_vl.py      # 验证 qwen-vl-max 认图（会读取同目录 tomato.jpg）
+python smoke_test.py --vision          # 先确认两个教师 Key 都通
+python pipeline/build_dataset.py --limit 150 --budget 60
+python pipeline/evaluate.py --predictor teacher-b
 ```
+
+产物落在 `scene_ai_server/data/`，其中 `dataset_report.md` 与 `eval_report.md` 是自动生成的统计报告。
+标注结果有缓存，重复运行不会重复消耗 API 额度。
 
 ---
 
-## 🔌 接口文档
+## 六、接口文档
 
-基地址：`http://<你的地址>:8000`，全部为 **POST**，返回 JSON。
-
-### 🍜 做饭 / 饮食场景
-
-| 接口 | 入参 | 返回 |
-| --- | --- | --- |
-| `POST /analyze_image` | `multipart/form-data`，字段名 **`file`**（图片） | `scene`、`ingredients`、`dish`、`steps`、`tips` |
-
-**调用示例**
-
-```bash
-curl -X POST "http://localhost:8000/analyze_image" -F "file=@tomato.jpg"
-```
-
-**返回示例**
+基地址 `http://<host>:8000`。**所有响应都带 `meta` 段**：
 
 ```json
 {
-  "scene": "food",
-  "ingredients": ["番茄", "鸡蛋"],
-  "dish": "番茄炒蛋",
-  "steps": ["鸡蛋打散加少许盐", "番茄切块热油下锅", "倒入蛋液翻炒均匀"],
-  "tips": "番茄先去皮口感更好"
+  "executor": "cloud",
+  "model": "qwen-vl-max+qwen3-max",
+  "latency_ms": 1240,
+  "route_reason": "端侧执行器未接入，本次直连云端",
+  "stages": { "recognize": 420, "generate": 820 },
+  "confidence": null
 }
 ```
 
-### 📄 阅读场景
+| 接口 | 入参 | 返回要点 |
+|---|---|---|
+| `GET /health` | — | `status`、`version`、`provider`、`models`、`edge` |
+| `GET /capabilities` | — | 场景清单（驱动客户端首页能力网格） |
+| `POST /analyze_image` | multipart `file` | `ingredients` / `dish` / `steps` / `tips` + `meta.stages` 两段耗时 |
+| `POST /reading/text` | JSON `{content}` | `summary` / `key_points` / `difficulty` / `qa_suggestion` |
+| `POST /reading/image` | multipart `file` | 同上 |
+| `POST /reading/pdf` | multipart `file` | 同上 + `page_count` |
+| `POST /chat/reply` | JSON `{context, style}` | `reply` / `alternatives[]` / `explain` |
+| `POST /chat/rewrite` | JSON `{text, style}` | 同上 |
+| `POST /chat/context` | JSON `{messages[], goal, style}` | 同上 |
 
-| 接口 | 入参 | 返回 |
-| --- | --- | --- |
-| `POST /reading/text` | JSON：`{"content": "正文"}` | `scene`、`summary`、`key_points[]`、`difficulty`、`qa_suggestion` |
-| `POST /reading/image` | `multipart`：`file`（截图/照片） | `scene`、`summary`、`key_points[]`、`qa_suggestion` |
-| `POST /reading/pdf` | `multipart`：`file`（PDF） | `scene`、`page_count`、`summary`、`key_points[]`、`qa_suggestion` |
-
-> `difficulty` 取值：`简单` / `中等` / `偏难`；`/reading/pdf` 目前**只解析前 3 页**（`max_pages = min(3, len(reader.pages))`）。
-
-### 💬 聊天辅助场景
-
-| 接口 | 入参 | 返回 |
-| --- | --- | --- |
-| `POST /chat/reply` | JSON：`{"context": "对方说的话", "style": "自然"}` | `scene`、`reply`、`style`、`alternatives[]`、`explain` |
-| `POST /chat/rewrite` | JSON：`{"text": "原句", "style": "礼貌"}` | 同上（`scene` 为 `chat_rewrite`） |
-| `POST /chat/context` | JSON：`{"messages": [{"role":"user","content":"..."}], "goal": "拒绝但不得罪", "style": "委婉"}` | 同上（`scene` 为 `chat_context`） |
-
-**返回示例**
+**返回示例**（`/chat/reply`）：
 
 ```json
 {
@@ -261,114 +247,194 @@ curl -X POST "http://localhost:8000/analyze_image" -F "file=@tomato.jpg"
   "reply": "这周实在排不开，下周我来定时间可以吗？",
   "style": "委婉",
   "alternatives": ["最近手上事有点多，我们约下周？", "这次先不参加了，下次一定到"],
-  "explain": "先给出客观原因再提供替代方案，既明确拒绝又保留关系"
+  "explain": "先给出客观原因再提供替代方案，既明确拒绝又保留关系",
+  "meta": { "executor": "cloud", "model": "qwen3-max", "latency_ms": 980, "route_reason": "端侧执行器未接入，本次直连云端", "stages": {} }
 }
 ```
 
 ---
 
-## 🎯 核心功能说明
+## 七、数据引擎（S1 + S2，已实际跑通）
 
-### 1. 拍食材 → 出菜谱：两级流水线 + 强约束 JSON
+端侧方案里最先落地的是**数据侧**——它不依赖显卡、不依赖 NDK，而且是后面所有训练的前提。
 
-`/analyze_image` 不是"一次问模型"，而是**两级串联**：
-
-```
-图片 ──▶ qwen-vl-max ──▶ "番茄, 鸡蛋" ──▶ qwen3-max ──▶ 结构化菜谱 JSON
-        （只做识别，不做发挥）            （只做生成，基于识别结果）
+```bash
+cd scene_ai_server
+python pipeline/build_dataset.py --limit 150 --budget 60
 ```
 
-**为什么拆两级？** 让视觉模型只负责"看图说话"这种它擅长的事，把"推理与组织"交给语言模型。这样识别环节的 Prompt 可以极简（"用中文名称，逗号分隔，不要解释"），生成环节又能拿到干净的食材清单，避免视觉模型在长输出里跑偏。
+```
+① 种子展开 (150)  →  ② 双教师标注  →  ③ 契约校验  →  ④ 三信号难度
+                                    →  ⑤ MinHash 去重  →  ⑥ 子模覆盖  →  ⑦ 配额配比
+```
 
-**工程上的两个细节：**
+### 实测结果（全部来自真实运行，未手工填写）
 
-- **兼容多形态返回**：`qwen-vl-max` 的 `content` 可能是字符串，也可能是 `[{"type":"output_text",...}]` 结构，代码里统一做了归一化处理
-- **JSON 解析兜底**：模型偶尔不按 JSON 输出，此时不抛异常，而是把原文塞进 `steps` 并把 `dish` 标为 `"JSON 解析失败"`，保证前端**永远拿得到可渲染的结构**
+| 阶段 | 指标 | 结果 |
+|---|---|---|
+| ③ 契约校验 | **契约合法率** | **100%**（150/150） |
+| ④ 难度评估 | 平均难度 / 三信号可用数 | 0.312 / 150·150·143 |
+| ⑤ 去重 | LSH 候选对 → 精确复核删除 | 274 → **22 条（14.7%）** |
+| ⑥ 覆盖优化 | 网格覆盖 | **37/37 格** |
+| ⑥ 覆盖优化 | 子模目标 F vs 随机基线 | 47.01 vs 39.71 → **提升 18.4%** |
+| ⑦ 配额配比 | 难度分布 vs 目标 (30/50/20) | **36.7% / 50.0% / 13.3%** |
+| 评测 | 标签噪声下限（教师B × 教师A 标注） | scene 87.2% / intent 82.0% / 槽位 F1 0.838 |
 
-### 2. 聊天助手：从 ChatBot 到"沟通决策辅助"
+### 三个实测发现（写进文档，因为它们是流程真正的价值）
 
-这个模块的设计出发点不是"帮我回条消息"，而是"**我想拒绝，但不想伤人**"。它把沟通拆成了 **场景 + 目标 + 风格** 三个可控维度：
+1. **契约枚举用了英文、prompt 又没列取值 → 合法率 0%。** 教师只能猜，输出「晚饭」而不是 `dinner`。修正后 100%。教训：*契约必须显式到模型能照抄的程度。*
+2. **`temperature=0` 会摧毁 logprobs。** 极低温度把分布压成 one-hot，接口返回的 `logprob` 恒为 0、候选恒为 -9999。因此标签（T=0，保证可复现）与软标签（T=1，保证分布有意义）**必须分成两次调用**。
+3. **难度分布稀疏是语料问题，不是度量问题。** 第一轮 120 条全落进 easy 档；排查后发现种子都是"换个食材名"式的表面变化，任务本身毫无歧义。补上真正的困难样本、并把采样从「全局随机截断」改成「按组轮转」后，hard 档才被填满。
 
-| 能力 | 接口 | 说明 |
-| --- | --- | --- |
-| 基础智能回复 | `/chat/reply` | 语义理解 + 语气可控 |
-| 风格改写 | `/chat/rewrite` | 礼貌 / 委婉 / 幽默 / 职场 / 亲密 / 冷处理 |
-| 多轮语境建模 | `/chat/context` | 输入完整对话历史 + 角色 + 当前目标 |
-| 目标驱动 | `/chat/context` 的 `goal` | 接受 / 拒绝 / 推迟 / 转移话题 / 降低冲突 |
-| 多候选 + 可解释 | 全部接口 | 推荐回复 + 2 条备选 + **为什么这样回** |
+> 第 3 条对任何数据流水线都成立：**稀有类别必须显式保底，不能指望随机采样照顾它。**
 
-最后一条是刻意的产品立场：**给人选择而不是替人做决定**，AI 是协作方，不是代笔。完整的设计思考见 [`scene_ai_server/聊天场景模块创新点及UI介绍.md`](scene_ai_server/聊天场景模块创新点及UI介绍.md)。
+### 产物
 
-### 3. 阅读场景：三种输入，同一套输出契约
+| 文件 | 内容 |
+|---|---|
+| `data/distill_dataset.jsonl` | 蒸馏数据集：硬标签 + **软标签（教师 top-K 分布）** + 难度 + 质量分 |
+| `data/eval_gold.jsonl` | 评测集 v1（与训练集按 id 严格互斥） |
+| `data/edge_contract.schema.json` | 端侧语法约束解码用的 JSON Schema |
+| `data/dataset_report.md` | 自动生成的统计报告 |
+| `data/eval_report.md` | 评测报告（标签噪声下限） |
 
-文本 / 截图 / PDF 三条入口，出口结构完全一致（`summary` + `key_points` + `qa_suggestion`）。这样前端只需要写一套结果卡片，未来扩展 OCR、网页剪藏等新入口时也不用改 UI。
-
----
-
-## ✅ 实现进度（对标设计文档）
-
-设计文档规划了 5 大场景与完整的场景触发链路，当前实现情况如下：
-
-| 模块 | 规划 | 当前状态 |
-| --- | --- | --- |
-| 云端 7 个 AI 接口 | ✅ | ✅ **全部实现**（`app.py`） |
-| 拍照识别食材 → 菜谱 | ✅ 第 1 周 | ✅ **端到端打通**（拍照 → 上传 → 解析 → Toast 展示） |
-| 聊天辅助 | ✅ 第 2 周 | ⚠️ **后端接口已就绪，Android 端 UI 未实现** |
-| 阅读总结（文本/图/PDF） | ✅ 第 2 周 | ⚠️ **后端接口已就绪，Android 端 UI 未实现** |
-| 首页控制面板（多场景开关） | ✅ | ❌ 仅有单个「拍照并上传」按钮 |
-| 场景自动触发（Accessibility Service） | ✅ 第 3 周 | ❌ 未实现 |
-| 悬浮窗展示 | ✅ 第 4 周 | ❌ 未实现（`SYSTEM_ALERT_WINDOW` 权限已声明） |
-| 位置感知服务 | ✅ 第 5 周 | ❌ 未实现（未申请定位权限） |
-| 夜间 / 护眼模式 | ✅ 第 5 周 | ❌ 未实现 |
-
-**一句话概括**：**AI 能力层（云端）基本完成，产品体验层（Android）只完成了"拍菜"这一条主线。**
+评测还暴露了一个有意思的现象：`none`（无场景/歧义输入）的分类准确率只有 **42.9%**，远低于其他场景 —— 这**反证了难度信号是有效的**：那些被判定为难的样本，确实是两个教师都拿不准的样本。
 
 ---
 
-## ⚠️ 已知问题与限制
+## 八、端侧模型方案（设计已完成，实现待推进）
 
-### 功能性
+详细方案见 [`docs/02-端侧模型方案.md`](docs/02-端侧模型方案.md)，这里只给结论：
 
-- [ ] **端口不一致（会导致连不上）**：`app.py` 原注释写启动端口 `9100`，而 Android 端 `BASE_URL` 硬编码为 `8000`。README 已统一为 **8000**，但请确认两边一致
-- [ ] Android 端**只有一个 Activity、一个按钮**，聊天与阅读场景没有前端入口
-- [ ] 结果通过 `Toast` 展示完整菜谱，长文本易被截断，应改为页面或浮窗
-- [ ] 场景自动触发、悬浮窗、定位、护眼模式均未实现（见上表）
-- [ ] `test/` 与 `androidTest/` 下仍是模板生成的 `ExampleUnitTest` / `ExampleInstrumentedTest`，**没有真实测试**
+| 环节 | 方案要点 |
+|---|---|
+| **能力契约** | 端侧只学感知/决策/抽取三类能力，**长生成与复杂推理留云端** |
+| **数据引擎** | 三信号客观难度（教师自一致性 × 学生探针损失 × 跨教师分歧）+ 子模覆盖优化（$1-1/e$ 保证）+ 线性规划配比 |
+| **三层蒸馏** | Response → **Logit（top-K logits 离线缓存，绕开显存限制）** → Feature（选做） |
+| **量化** | 分层敏感性分析 → **比特分配当背包问题求解**；embedding/lm_head 单独处理；KV cache 量化 |
+| **端侧运行时** | llama.cpp/GGUF 主线，LiteRT-LM 横评；目标机骁龙 8 Gen 3 **可走 Hexagon NPU** |
+| **可靠性** | **语法约束解码**保证 JSON 100% 合法 + 槽位校验兜底 |
+| **路由** | 温度缩放/等渗回归校准置信度 → 代价敏感决策（λ 由实测帕累托前沿反推） |
+| **进阶** | 任务级投机执行；端云投机解码 |
 
-### 安全与健壮性
-
-- [x] 三个文件中的硬编码 API Key 已改为**从环境变量 `DASHSCOPE_API_KEY` 读取**，源码不再包含任何密钥
-- [ ] 服务端**无任何鉴权**，任何能访问到该端口的人都可以直接消耗你的模型额度，**切勿直接暴露到公网**
-- [ ] `network_security_config.xml` 中 `cleartextTrafficPermitted="true"` **全局放开了明文 HTTP**，仅适用于本地开发，上线前必须收紧（建议只在 `debug` 构建里允许）
-- [ ] 上传接口**未校验文件类型与大小**，缺少请求体上限，存在被大文件打爆的风险
-- [ ] `app.py` 中直接 `print` 了模型返回的**完整响应体**（`print("VL body:", resp.text)`），日志量偏大且可能包含用户内容，建议改为按级别记录
-- [ ] 大模型调用**未做超时重试与降级**（仅有 `timeout=30`），网络抖动会直接返回 500
-- [ ] 未设置 CORS，若将来接入 Web 端需补上
-
-### 工程配置
-
-- [ ] `gradle-wrapper.properties` 的 `distributionUrl` 指向 `mirrors.aliyun.com/macports/distfiles/gradle/...`，这是**非官方的镜像路径**，他人 clone 后很可能下载失败；建议换成官方地址或稳定的镜像
-- [ ] 缺少 `LICENSE` 文件
+> ⚠️ **诚实声明**：端侧模型**尚未部署到 App 中**。技术面板与设置页会如实显示"端侧模型未部署"，并在接入后自动点亮相关统计 —— 界面无需改动。
 
 ---
 
-## 📚 文档索引
+## 九、目录结构
+
+```
+移动AI生活助手/
+├── docs/                                   # 📘 设计文档
+│   ├── 01-总体设计.md                       #    问题定义、级联路由框架、创新点、实验设计、路线图
+│   ├── 02-端侧模型方案.md                    #    能力契约、数据引擎、三层蒸馏、量化、运行时、路由
+│   └── 03-UI-UX设计规范.md                   #    信息架构、页面规格、设计 token、文案规范
+│
+├── scene_ai_server/                        # 🐍 云侧服务 + 离线流水线
+│   ├── app.py                              #    路由层（唯一处理 HTTP 的地方）
+│   ├── jsonx.py                            #    零依赖 JSON 兜底提取（在线与离线共用）
+│   ├── mova/
+│   │   ├── config.py                       #    配置（唯一读环境变量的地方）
+│   │   ├── providers.py                    #    厂商适配（唯一发请求的地方）
+│   │   └── prompts.py                      #    提示词（唯一写 prompt 的地方）
+│   ├── pipeline/                           #    🔬 离线数据引擎（零第三方依赖）
+│   │   ├── contract.py                     #      S1 能力契约 + JSON Schema + 校验器
+│   │   ├── seeds.py                        #      场景种子库（按组轮转采样）
+│   │   ├── teacher.py                      #      双教师客户端（含 logprobs 捕获）
+│   │   ├── difficulty.py                   #      三信号难度
+│   │   ├── dedup.py                        #      MinHash + LSH
+│   │   ├── coverage.py                     #      子模最大化覆盖
+│   │   ├── allocate.py                     #      配额配比（最大余数法）
+│   │   ├── build_dataset.py                #      主流程 + 报告生成
+│   │   └── evaluate.py                     #      评测（含标签噪声下限）
+│   ├── data/                               #    产物：数据集 / 评测集 / 报告（cache 已忽略）
+│   ├── requirements.txt · requirements-train.txt
+│   └── .env.example
+│
+├── SceneAi_App/                            # 📱 Android 端（Kotlin + Compose，单 Activity）
+│   ├── app/src/main/java/com/mova/sceneai/
+│   │   ├── MainActivity.kt · MovaApp.kt
+│   │   ├── core/                           #    容器 / 设置 / 错误 / 媒体 / 格式化
+│   │   ├── data/                           #    model / remote / local / repo（含 Router）
+│   │   └── ui/                             #    theme / nav / components / 各页面
+│   ├── keystore/debug.keystore             #    一次性调试密钥（口令为约定的 android）
+│   └── gradle/libs.versions.toml
+│
+└── README.md
+```
+
+---
+
+## 十、实现进度
+
+图例：✅ 已完成　🟡 进行中　⬜ 未开始（方案已设计）
+
+| 层 | 模块 | 状态 |
+|---|---|---|
+| 端·交互 | Compose 多页应用（8 个页面） | ✅ **编译通过，产出 APK** |
+| 端·交互 | 首启向导（价值 → 权限 → 连接检测） | ✅ |
+| 端·交互 | 结构化结果渲染（全面取代 Toast） | ✅ |
+| 端·交互 | 一键示例（三个场景各一份，冷启动友好） | ✅ |
+| 端·交互 | 「为什么现在完成」技术面板 + 端云徽标 | ✅ |
+| 端·网络 | Retrofit + 统一错误翻译（三件套文案） | ✅ |
+| 端·路由 | `Router` 代价敏感决策函数（端侧未就绪时恒走云端） | ✅ 代码就绪 |
+| 端·推理 | 端侧 SLM 执行器（llama.cpp JNI） | ⬜ |
+| 端·推理 | 视觉轻量分类器 | ⬜ |
+| 端·路由 | 置信度校准 + 语法约束解码 + 槽位校验 | ⬜ |
+| 端·感知 | 触发决策（老虎机 + 退避）、无障碍/悬浮窗 | ⬜ |
+| 云·在线 | 7 个能力接口 + `/health` + `/capabilities` + `meta` | ✅ |
+| 云·在线 | Provider 抽象（DashScope ⇄ DeepSeek ⇄ 自建） | ✅ |
+| 云·在线 | 魔数校验、体积上限、重试退避、结构化日志、CORS | ✅ |
+| 云·离线 | **S1 能力契约**（可执行契约 + JSON Schema + 校验器） | ✅ |
+| 云·离线 | **S2 数据引擎**（双教师标注 → 三信号难度 → MinHash 去重 → 子模覆盖 → 配额配比） | ✅ |
+| 云·离线 | 评测脚本 + 评测集 v1 + 标签噪声下限 | ✅ |
+| 云·离线 | 三层蒸馏训练（Response / Logit / Feature） | ⬜ |
+| 云·离线 | 量化（分层敏感性 + 背包比特分配） | ⬜ |
+| 工程 | 单元测试与仪器测试 | ⬜ |
+
+---
+
+## 十一、已知限制
+
+- **端侧模型未接入**：当前所有推理都在云端完成；`Router` 已实现完整规则，端侧就绪后自动生效
+- **数据规模是演示级**：数据集为 60 条、评测集 40 条，用于跑通并验证流水线；流水线本身可线性扩展
+- **评测标签未经人工核验**：`eval_gold.jsonl` 是教师标注的，因此只能测「标签噪声下限」（两个教师的一致率 82–87%），不能当作绝对精度
+- **软标签与硬标签序列不完全对齐**：对话式 API 无法对指定前缀做 teacher forcing 取分布，当前软标签取自 T=1 的自回归生成；换成自托管 vLLM 用 `prompt_logprobs` 可消除
+- **场景自动触发未实现**：无障碍服务、悬浮窗、位置感知仍是设计稿
+- **服务端无鉴权**：任何能访问到端口的人都能消耗你的模型额度，**切勿直接暴露到公网**
+- **明文 HTTP**：`network_security_config.xml` 为本地联调放开了明文流量，上线前需收紧
+- **无自动化测试**：`test/` 与 `androidTest/` 目前为空
+- **release 未开混淆**：开启前需为 kotlinx.serialization / Retrofit 补 keep 规则
+
+---
+
+## 十二、开发环境注意事项
+
+| 事项 | 说明 |
+|---|---|
+| **仓库路径含中文** | 本仓库路径为 `移动AI生活助手`，AGP 默认会拒绝含非 ASCII 路径的构建。已在 `gradle.properties` 中设置 `android.overridePathCheck=true`（实测 JDK 21 + AGP 8.13.1 可正常构建）。若你移到纯英文路径，可以删掉这一行 |
+| **调试密钥** | AGP 默认在 `~/.android/` 自动生成调试密钥，在受限环境（沙箱 / 无家目录写权限的 CI）会失败。这里改为使用仓库内置的 `SceneAi_App/keystore/debug.keystore`，其口令就是 Android 约定的 `android`，**不具备任何保密性**，仅供本地安装调试；release 请另行配置签名 |
+| **Gradle 发行版** | `gradle-wrapper.properties` 默认使用阿里云镜像（文件里注释了官方地址与腾讯镜像）。之所以默认镜像：在部分网络环境下 JVM 直连 `services.gradle.org` 会在 TLS 握手阶段收到 Connection reset，而镜像站稳定可用 |
+| **模型密钥** | 只放在服务端 `.env` 或环境变量里，**App 端永远不内置任何 Key** |
+| **PDF 解析** | 默认只解析前 3 页（`MOVA_MAX_PDF_PAGES`），扫描件因无可提取文字会返回 422 并提示改用截图识别 |
+| **离线流水线的依赖** | `pipeline/` 下的数据引擎**零第三方依赖**，只用标准库即可运行；`requirements-train.txt` 里的 PyTorch 等是后续训练阶段才需要 |
+
+---
+
+## 十三、文档索引
 
 | 文档 | 内容 |
-| --- | --- |
-| [`SCENE-AI：基于多模态感知的智能场景触发式移动助手系统开发方案.md`](scene_ai_server/SCENE-AI：基于多模态感知的智能场景触发式移动助手系统开发方案.md) | 总体设计：系统架构、技术选型、5 大功能模块、AI 使用分类、UI 设计原则、2 个月开发路线、MVP 范围 |
-| [`聊天场景模块创新点及UI介绍.md`](scene_ai_server/聊天场景模块创新点及UI介绍.md) | 聊天模块：5 种模式分类、API 设计、5 个创新点拆解、与普通聊天助手的对比表、UI 设计建议 |
-
----
-
-## 📄 许可协议
-
-本仓库当前**未包含 `LICENSE` 文件**，默认保留全部权利。
-如需开放使用，建议在根目录补充一份 [MIT License](https://choosealicense.com/licenses/mit/)。
+|---|---|
+| [`docs/01-总体设计.md`](docs/01-总体设计.md) | 问题定义、代价敏感级联路由框架、系统架构、技术选型、5 个创新点、**消融实验设计**、9 阶段路线图、风险预案 |
+| [`docs/02-端侧模型方案.md`](docs/02-端侧模型方案.md) | 能力契约、数据引擎（三信号难度 / 子模覆盖 / LP 配比）、三层蒸馏、量化（分层敏感性 + 背包比特分配）、端侧运行时、端云路由、测量协议 |
+| [`docs/03-UI-UX设计规范.md`](docs/03-UI-UX设计规范.md) | 新用户友好 8 条验收标准、信息架构、页面规格、设计 token、文案规范 |
+| [`docs/04-能力契约.md`](docs/04-能力契约.md) | **S1**：端侧要学什么、为什么让模型自己输出 `need_cloud`、契约为什么必须可执行、两个实测缺陷的记录 |
+| [`docs/05-数据引擎.md`](docs/05-数据引擎.md) | **S2**：三信号难度、MinHash+LSH、子模覆盖的数学依据、配额最优性说明、**三个实测发现** |
+| [`docs/archive/`](docs/archive) | 早期方案存档（已被上面几份取代，保留以记录设计演进） |
 
 ---
 
 <p align="center">
   <b>不是等你开口，而是在你需要的那一刻，刚好出现。</b><br/>
-  <sub>SCENE-AI · 场景触发式移动 AI 助手</sub>
+  <sub>Mova-AI · 移动端主动智能助手</sub>
 </p>
