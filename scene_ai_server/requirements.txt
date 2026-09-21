@@ -1,5 +1,11 @@
+# -*- coding: utf-8 -*-
 # ============================================================
 # Mova-AI 云端服务依赖
+#
+# ⚠️ 首行的 coding cookie 不能删：本文件含中文注释，而 pip 解析 requirements
+#    文件时会先找 PEP-263 编码声明，找不到就退回**系统 locale 编码**。
+#    在中文 Windows（GBK）上会直接抛 UnicodeDecodeError: 'gbk' codec can't decode...
+#    加上这一行后，任何 locale 下都能正常安装。
 #
 # 安装：pip install -r requirements.txt
 # 启动：uvicorn app:app --host 0.0.0.0 --port 8000 --reload

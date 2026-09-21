@@ -1,5 +1,9 @@
+# -*- coding: utf-8 -*-
 # ============================================================
 # Mova-AI 离线流水线依赖（数据构造 / 蒸馏 / 量化 / 评测）
+#
+# ⚠️ 首行的 coding cookie 不能删（理由同 requirements.txt）：
+#    pip 找不到编码声明时会退回系统 locale 编码，中文 Windows 下会解析失败。
 #
 # 安装：pip install -r requirements-train.txt
 # 说明：这些依赖体积大（PyTorch 数 GB），只在本机或训练服务器上安装，
