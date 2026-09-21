@@ -1,6 +1,14 @@
 <resources>
+    <!--
+      项目命名采用「短名 + 全名」两级：
+        短名 app_name       —— 桌面图标与页面顶栏。手机顶栏放不下十几个字，
+                               写全名会被系统截断成「Mova-AI · 场景触发式…」，
+                               反而更难认。
+        全名 app_name_full  —— 关于页、启动页，以及 README / 文档里的正式名称。
+    -->
     <string name="app_name">Mova-AI</string>
-    <string name="app_name_full">Mova-AI 生活助手</string>
+    <string name="app_name_full">Mova-AI · 场景触发式移动 AI 生活助手</string>
+    <string name="app_name_desc">场景触发式移动 AI 生活助手</string>
     <string name="app_slogan">不是等你开口，而是在你需要的那一刻，刚好出现。</string>
 
     <!-- 通知（场景触发链路） -->

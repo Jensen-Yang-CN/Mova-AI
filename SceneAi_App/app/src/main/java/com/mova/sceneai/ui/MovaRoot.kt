@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,6 +36,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.mova.sceneai.MovaApp
+import com.mova.sceneai.R
 import com.mova.sceneai.core.ThemeMode
 import com.mova.sceneai.ui.about.AboutScreen
 import com.mova.sceneai.ui.chat.ChatScreen
@@ -215,9 +217,15 @@ private fun SplashScreen() {
             Text("✨", style = MaterialTheme.typography.displaySmall)
             Spacer(Modifier.height(12.dp))
             Text("Mova-AI", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
-                "不是等你开口，而是在你需要的那一刻，刚好出现。",
+                stringResource(R.string.app_name_desc),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                stringResource(R.string.app_slogan),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

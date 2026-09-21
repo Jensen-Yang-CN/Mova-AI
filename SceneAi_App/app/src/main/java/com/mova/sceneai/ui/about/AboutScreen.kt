@@ -8,8 +8,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mova.sceneai.BuildConfig
+import com.mova.sceneai.R
 import com.mova.sceneai.ui.components.BulletList
 import com.mova.sceneai.ui.components.Divider
 import com.mova.sceneai.ui.components.InfoBanner
@@ -31,9 +33,15 @@ fun AboutScreen(onBack: () -> Unit) {
         MovaCard {
             Column {
                 Text("Mova-AI", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    "不是等你开口，而是在你需要的那一刻，刚好出现。",
+                    stringResource(R.string.app_name_desc),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.app_slogan),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
