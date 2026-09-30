@@ -129,6 +129,11 @@ class TeacherClient:
         if top_logprobs > 0:
             payload["logprobs"] = True
             payload["top_logprobs"] = min(top_logprobs, 20)
+        # ⚠️ 内网端点的教师是思考型模型：不开关思考时它会先把 max_tokens 烧在
+        #    "reasoning" 字段上，content 为空，契约校验 0%。实测
+        #    enable_thinking=false 直接出纯 JSON，~4s → ~1s。
+        #    若端点不认这个字段并返回 400：删掉下一行，改把 max_tokens 调大。
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
 
         started = time.monotonic()
         data = self._post(payload)

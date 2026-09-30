@@ -14,7 +14,7 @@
 
 产物：
     data/distill_dataset.jsonl   蒸馏数据集（含软标签，可直接用于 logit 蒸馏）
-    data/eval_gold.jsonl         评测集 v1（与训练集按 id 严格互斥）
+    data/eval_gold.jsonl         评测集（与训练集按 id 严格互斥，按 场景/意图 分层抽取得与训练集同分布）
     data/dataset_report.md       数据报告（含各项统计与对照数字）
     data/cache/*.jsonl           中间缓存（重跑不会重复调 API）
 
@@ -26,8 +26,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
+import random
 import time
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -149,6 +152,8 @@ def label_one(
 
     # ---- 教师 A 的软标签与置信度：T=1 采样，此时 logprobs 才有意义 ----
     try:
+        if os.environ.get("MOVA_DISABLE_SOFT_LABEL") == "1":
+            raise TeacherError("软标签已禁用（MOVA_DISABLE_SOFT_LABEL=1），跳过 logprobs 采样")
         sampler = teacher_a.complete(
             prompt, temperature=1.0, max_tokens=400, top_logprobs=cfg.logprob_k
         )
@@ -180,6 +185,10 @@ def label_one(
 
     # ---- 信号三：跨教师分歧 ----
     try:
+        # 教师 B 与教师 A 同模型同端点时输出必然相同，信号恒 1.0 且调用 100% 冗余。
+        # MOVA_SKIP_TEACHER_B=1 跳过教师 B（省 1/5 调用量），难度由剩余两信号合成。
+        if os.environ.get("MOVA_SKIP_TEACHER_B") == "1":
+            raise TeacherError("教师B已禁用（MOVA_SKIP_TEACHER_B=1），未采集跨教师信号")
         other = teacher_b.complete(prompt, temperature=0.0, max_tokens=400)
         parsed_b = extract_json(other.text)
         if isinstance(parsed_b, dict) and not validate(parsed_b):
@@ -226,8 +235,19 @@ def stage_labels(
 
     todo = [seed for seed in seeds if seed.id not in cached]
     if todo:
+        def _flush_cache() -> None:
+            """原子落盘（临时文件 + rename）：进程被杀时最多损失最后一次
+            落盘之后的进度，缓存文件本身永远不会被写坏。v2.2：服务器被
+            甲方演示中断后加上的断点续标能力。"""
+            tmp = cfg.labels_cache.parent / (cfg.labels_cache.name + ".tmp")
+            with tmp.open("w", encoding="utf-8") as handle:
+                for seed in seeds:
+                    if seed.id in cached:
+                        handle.write(json.dumps(cached[seed.id], ensure_ascii=False) + "\n")
+            tmp.replace(cfg.labels_cache)
+
         print(f"[② 标注] 需要调用教师 {len(todo)} 条 × 约 {1 + cfg.k_samples - 1 + 1} 次请求"
-              f"（并发 {cfg.workers}）")
+              f"（并发 {cfg.workers}；每 100 条增量落盘缓存，被杀后重跑自动续标）")
         done = 0
         with ThreadPoolExecutor(max_workers=cfg.workers) as pool:
             futures = {
@@ -237,13 +257,13 @@ def stage_labels(
                 record = future.result()
                 cached[record["id"]] = record
                 done += 1
-                if done % 20 == 0 or done == len(todo):
+                if done % 100 == 0:
+                    _flush_cache()
+                    print(f"    进度 {done}/{len(todo)}（缓存已落盘）")
+                elif done % 20 == 0:
                     print(f"    进度 {done}/{len(todo)}")
 
-        with cfg.labels_cache.open("w", encoding="utf-8") as handle:
-            for seed in seeds:
-                if seed.id in cached:
-                    handle.write(json.dumps(cached[seed.id], ensure_ascii=False) + "\n")
+        _flush_cache()
         print(f"[② 标注] 已写入缓存：{cfg.labels_cache}")
 
     return [cached[seed.id] for seed in seeds if seed.id in cached]
@@ -406,11 +426,36 @@ def run(cfg: Config) -> dict[str, Any]:
     for note in allocation.notes:
         print(f"    ⚠ {note}")
 
-    # ---------- 评测集（与训练集严格互斥） ----------
-    gold_pool = [r for r in records if not r["valid"]] + [
-        valid[i] for i in sorted(allowed_indices - set(final_indices))
-    ]
-    gold = gold_pool[: cfg.gold_size]
+    # ---------- 评测集（与训练集严格互斥，分层抽样） ----------
+    # v2 修复：旧版 gold_pool[:gold_size] 直接取前 N 条（记录序 = 场景重排，
+    # food 块整块在最前），实测 500 条全是 food、评测集偏科单一场景。
+    # 现按最终数据集的 (scene,intent) 占比配名额（最大余数法），
+    # 组内固定种子 42 抽样——评测分布与训练分布一致，可复现。
+    # v2.1：分层键用教师标签（label.scene/label.intent）而非种子规格顶层字段——
+    # 学生学的是标签，评测分布必须 = 训练（标签）分布；顶层与标签存在系统性
+    # 重标（实测 5500 中 reading/key_points 顶层 329 vs 标签 622 等）。
+    gold = _stratified_gold(
+        [valid[i] for i in sorted(allowed_indices - set(final_indices))],
+        Counter(
+            (r["label"]["scene"], r["label"]["intent"]) for r in final_records
+        ),
+        cfg.gold_size,
+    )
+    # 兜底：有效池不足时补无效样本（旧逻辑，防止 gold 缺数）
+    if len(gold) < cfg.gold_size:
+        have = {r["id"] for r in gold}
+        for r in records:
+            if len(gold) >= cfg.gold_size:
+                break
+            if not r["valid"] and r["id"] not in have:
+                gold.append(r)
+    gold_scene = Counter(
+        (r.get("label") or {}).get("scene", "?") for r in gold
+    )
+    print(
+        f"[⑧ 评测集] {len(gold)} 条（按 标签 场景/意图 分层，与训练标签同分布），"
+        f"标签场景构成：" + "  ".join(f"{k}={v}" for k, v in gold_scene.most_common())
+    )
 
     # ---------- 写出 ----------
     dataset_path = cfg.out_dir / "distill_dataset.jsonl"
@@ -425,7 +470,11 @@ def run(cfg: Config) -> dict[str, Any]:
     )
 
     stats["dataset"] = _dataset_stats(final_records)
-    stats["gold"] = {"size": len(gold), "path": str(gold_path.name)}
+    stats["gold"] = {
+        "size": len(gold),
+        "path": str(gold_path.name),
+        "scene": dict(gold_scene),
+    }
 
     report = build_report(stats)
     (cfg.out_dir / "dataset_report.md").write_text(report, encoding="utf-8")
@@ -492,6 +541,53 @@ def _write_gold(path: Path, records: list[dict[str, Any]]) -> None:
                 "difficulty": record["difficulty"],
             }
             handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _stratified_gold(
+    pool_records: list[dict[str, Any]],
+    target_comp: "Counter[tuple[str, str]]",
+    n: int,
+    seed: int = 42,
+) -> list[dict[str, Any]]:
+    """评测集分层抽样：名额按 target_comp 的 (scene,intent) 占比用最大余数法
+    配到 n，组内固定种子抽样（可复现）；目标组合缺席或池不足时循环补位。
+    分组键 = 记录的 label.scene/label.intent（教师标签，学生实际学的目标）。"""
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for r in pool_records:
+        exp = r.get("label") or {}
+        groups[(str(exp.get("scene", "?")), str(exp.get("intent", "?")))].append(r)
+    rng = random.Random(seed)
+    shuffled = {cell: list(items) for cell, items in groups.items()}
+    for items in shuffled.values():
+        rng.shuffle(items)
+
+    total_target = sum(target_comp.values()) or 1
+    raw = {cell: n * cnt / total_target for cell, cnt in target_comp.items()}
+    alloc = {cell: int(v) for cell, v in raw.items()}
+    for cell, _ in sorted(raw.items(), key=lambda kv: kv[1] - int(kv[1]), reverse=True):
+        if sum(alloc.values()) >= n:
+            break
+        alloc[cell] += 1
+
+    ptr = {cell: 0 for cell in shuffled}
+    chosen: list[dict[str, Any]] = []
+    for cell in sorted(alloc):
+        for _ in range(min(alloc.get(cell, 0), len(shuffled.get(cell, [])))):
+            chosen.append(shuffled[cell][ptr[cell]])
+            ptr[cell] += 1
+    # 目标组合不在池内、或池不足：按组合循环补位直到 n（或池耗尽）
+    while len(chosen) < n:
+        progressed = False
+        for cell in sorted(shuffled):
+            if len(chosen) >= n:
+                break
+            if ptr[cell] < len(shuffled[cell]):
+                chosen.append(shuffled[cell][ptr[cell]])
+                ptr[cell] += 1
+                progressed = True
+        if not progressed:
+            break
+    return chosen
 
 
 def _dataset_stats(records: list[dict[str, Any]]) -> dict[str, Any]:

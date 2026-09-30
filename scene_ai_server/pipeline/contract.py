@@ -58,6 +58,31 @@ SLOTS_BY_SCENE: dict[str, dict[str, tuple[str, bool, Any]]] = {
     "none": {},
 }
 
+#: v3.2 场景判定规则：150 条人工抽检暴露教师对三类语义的自由发挥
+#: （place_type 取数源混用 47%、食物新鲜度问题过度路由、relation 角色口径不一），
+#: 根源是 prompt 只给了枚举值、没给确定性判定规则。规则必须让教师没有
+#: 第二条路可走——同类 utterance 必须落同一个标签。
+SCENE_RULES: dict[str, str] = {
+    "food": (
+        "  intent 区分：问「做什么/怎么做/能不能凑一顿」等烹饪方案问题一律 recipe_lookup；"
+        "仅当诉求以饮食管理为核心（减脂、控制热量、健康限制）才用 diet_advice；"
+        "「能不能一起吃/会不会相克」是 ingredient_check。"
+        "与做饭无关的食物类问题（怎么挑选、新不新鲜、怎么保存、多少钱）一律 scene=none、intent=none。"
+    ),
+    "location": (
+        "  place_type 指用户**当前位置**的类型：utterance 明确提到位置时按它映射到最接近的枚举值"
+        "（不在枚举中填「其他」）；utterance 未提位置时用环境信号的「位置」字段（不在枚举中填「其他」）；"
+        "**不要**填用户想去或顺路去的目的地。"
+        "  intent 区分：「值不值得跑一趟/附近哪家顺路」是 nearby_hint；「排时间/来得及吗/提醒」是 timing_reminder。"
+    ),
+    "chat": (
+        "  relation 指**对话对象**（utterance 指向的那个人）相对用户的社会关系："
+        "对象是用户的领导/主管填「上级」；下属、同事、同学、邻居、室友填「同事」；"
+        "客户、服务人员等无工作与社会关系的填「陌生人」；亲属填「家人」，密友填「朋友」。"
+        "不要填用户自己的职位。"
+    ),
+}
+
 #: 复杂度分档：用于数据配比与难度分层
 COMPLEXITY_BANDS = (
     ("easy", 0.0, 0.34),
@@ -209,7 +234,6 @@ def _slot_spec_lines(scene: str) -> str:
             lines.append(f'    - "{key}"（{mark}，字符串）：{detail}')
     return "\n".join(lines)
 
-
 def contract_prompt(signals: str, utterance: str) -> str:
     """构造教师侧的任务提示。
 
@@ -224,10 +248,12 @@ def contract_prompt(signals: str, utterance: str) -> str:
     scene_blocks = []
     for scene in SCENES:
         intents = list(INTENTS_BY_SCENE[scene])
+        rule = SCENE_RULES.get(scene)
         scene_blocks.append(
             f'### scene = "{scene}"\n'
             f"  intent 只能取：{intents}\n"
             f"  slots 字段：\n{_slot_spec_lines(scene)}"
+            + (f"\n{rule}" if rule else "")
         )
     scenes_text = "\n\n".join(scene_blocks)
 

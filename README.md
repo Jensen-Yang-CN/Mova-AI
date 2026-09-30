@@ -364,6 +364,8 @@ python pipeline/evaluate.py \
 
 仓库内 `dataset_report.md` 和 `eval_report.md` 记录的是早期试跑：150 条种子候选，经筛选得到 60 条训练样本和 40 条评测样本。下面的覆盖率与教师一致率指标只描述这轮 pilot，不代表服务器上的 5500/500 正式批次。
 
+当前 `pipeline/seeds.py`、`build_dataset.py`、`contract.py` 和 `teacher.py` 已对齐正式数据生成时使用的版本：种子池按场景再平衡，gold 按教师标签的场景与意图分层抽取，并支持增量缓存与按环境开关跳过不适用的教师采样。仓库跟踪的 60/40 pilot 产物仍是早期快照，运行当前代码不会复现它们的原始文件摘要。
+
 ```bash
 cd scene_ai_server
 python pipeline/build_dataset.py --limit 150 --budget 60
