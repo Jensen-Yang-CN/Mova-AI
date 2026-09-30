@@ -1,4 +1,4 @@
-"""Generate prediction JSONL from one saved Mova-AI LoRA adapter."""
+"""Generate prediction JSONL from the Qwen3 base model or a saved LoRA adapter."""
 from __future__ import annotations
 
 import argparse
@@ -20,7 +20,7 @@ from pipeline.contract import contract_prompt  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-model", type=Path, required=True)
-    parser.add_argument("--adapter", type=Path, required=True)
+    parser.add_argument("--adapter", type=Path, help="LoRA adapter；不传则评测未微调的底座模型")
     parser.add_argument("--gold", type=Path, default=SERVER_DIR / "data/eval_gold.jsonl")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--limit", type=int, help="smoke 测试用")
@@ -29,6 +29,8 @@ def main() -> int:
 
     if not torch.cuda.is_available():
         parser.error("CUDA 不可用")
+    if args.adapter is not None and not args.adapter.is_dir():
+        parser.error(f"LoRA adapter 目录不存在：{args.adapter}")
     tokenizer = AutoTokenizer.from_pretrained(args.base_model, local_files_only=True, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.base_model,
@@ -38,7 +40,8 @@ def main() -> int:
         trust_remote_code=True,
         attn_implementation="sdpa",
     )
-    model = PeftModel.from_pretrained(model, args.adapter, local_files_only=True)
+    if args.adapter is not None:
+        model = PeftModel.from_pretrained(model, args.adapter, local_files_only=True)
     model.to("cuda").eval()
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -56,11 +59,31 @@ def main() -> int:
                 enable_thinking=False,
                 return_tensors="pt",
             )
-            encoded = encoded.to("cuda")
+            # Transformers may return a tensor or a BatchEncoding depending on
+            # version and tokenizer settings; normalize both to input tensors.
+            if hasattr(encoded, "keys") and "input_ids" in encoded:
+                input_ids = encoded["input_ids"]
+                attention_mask = encoded.get("attention_mask")
+            else:
+                input_ids = encoded
+                attention_mask = None
+            if not isinstance(input_ids, torch.Tensor):
+                input_ids = torch.as_tensor(input_ids, dtype=torch.long)
+            if input_ids.ndim == 1:
+                input_ids = input_ids.unsqueeze(0)
+            input_ids = input_ids.to("cuda")
+            if attention_mask is None:
+                attention_mask = torch.ones_like(input_ids)
+            else:
+                if not isinstance(attention_mask, torch.Tensor):
+                    attention_mask = torch.as_tensor(attention_mask, dtype=torch.long)
+                if attention_mask.ndim == 1:
+                    attention_mask = attention_mask.unsqueeze(0)
+                attention_mask = attention_mask.to(input_ids.device)
             with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
                 generated = model.generate(
-                    input_ids=encoded,
-                    attention_mask=torch.ones_like(encoded),
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
                     do_sample=False,
                     max_new_tokens=args.max_new_tokens,
                     pad_token_id=(
@@ -70,7 +93,7 @@ def main() -> int:
                     ),
                     eos_token_id=tokenizer.eos_token_id,
                 )
-            text = tokenizer.decode(generated[0, encoded.shape[1] :], skip_special_tokens=True)
+            text = tokenizer.decode(generated[0, input_ids.shape[1] :], skip_special_tokens=True)
             output.write(json.dumps({"id": row["id"], "text": text}, ensure_ascii=False) + "\n")
             count += 1
             if count % 25 == 0:

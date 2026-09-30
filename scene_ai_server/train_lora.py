@@ -56,9 +56,15 @@ class SFTDataset(Dataset):
                 # the full text and comparing token prefixes can falsely report a
                 # template mismatch. Keeping the prompt IDs from apply_chat_template
                 # also makes training use exactly the prefix used during inference.
-                prompt_ids = tokenizer.apply_chat_template(
+                prompt_encoding = tokenizer.apply_chat_template(
                     messages[:1], tokenize=True, add_generation_prompt=True, enable_thinking=False
                 )
+                # Recent Transformers versions may return a BatchEncoding instead
+                # of a bare token-ID list. Extract input_ids before concatenation.
+                if hasattr(prompt_encoding, "keys") and "input_ids" in prompt_encoding:
+                    prompt_ids = prompt_encoding["input_ids"]
+                else:
+                    prompt_ids = prompt_encoding
                 response_text = full_text[len(prompt_text) :]
                 response_ids = tokenizer(response_text, add_special_tokens=False)["input_ids"]
                 if hasattr(prompt_ids, "tolist"):
