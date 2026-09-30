@@ -10,8 +10,8 @@
     "logprob_k": "8",
     "gold_size": "40",
     "dedup_threshold": "0.8",
-    "out_dir": "E:\\CodeBase_YangJunJie\\移动AI生活助手\\scene_ai_server\\data",
-    "cache_dir": "E:\\CodeBase_YangJunJie\\移动AI生活助手\\scene_ai_server\\data\\cache"
+    "out_dir": "E:\\CodeBase_xxx\\移动AI生活助手\\scene_ai_server\\data",
+    "cache_dir": "E:\\CodeBase_xxx\\移动AI生活助手\\scene_ai_server\\data\\cache"
   },
   "seeds": {
     "total": 150,
