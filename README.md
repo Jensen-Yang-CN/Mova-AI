@@ -1,75 +1,55 @@
-# Mova-AI · 场景触发式移动 AI 生活助手
+# Mova-AI · 场景理解、端侧小模型与端云协同
 
-> **不是等你开口，而是在你需要的那一刻，刚好出现。**
->
-> 一个把**云端大模型的场景理解能力蒸馏进端侧小模型**、并基于**校准置信度做端云级联推理**的 Android 智能助手。
+> 面向 Android 的端云协同 AI 原型：围绕结构化场景理解、教师数据构造、Qwen3-0.6B LoRA 微调与代价敏感路由，探索小模型如何在移动端承担低延迟决策任务。
 
 [![Android](https://img.shields.io/badge/Android-minSdk%2026%20%7C%20targetSdk%2036-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Arch](https://img.shields.io/badge/Architecture-端云级联路由-2E7D32)](#系统架构)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Arch](https://img.shields.io/badge/Architecture-端云级联路由-2E7D32)](#二系统架构)
 
 ---
 
-## 一、这个项目和"调个大模型 API"的区别
+## 一、问题定义与技术目标
 
-市面上的 AI 助手大多是「**你问它才答**」：先打开 App、先想好怎么问、再等它回。Mova-AI 想反过来 —— **让 AI 自己判断该不该出现**。
+Mova-AI 聚焦一个移动端工程问题：**如何把场景识别、意图判断和结构化信息抽取等高频轻任务交给小模型，同时为低置信度或高复杂度任务保留云端升级路径。**
 
-它要回答的不是"怎么把请求发给大模型"，而是移动端 AI 的三个真问题：
+当前项目包含 Android 客户端、FastAPI 在线服务和离线训练流水线。在线能力目前由云端模型提供；端侧模型正在进行 Qwen3-0.6B 的 LoRA 监督微调，尚未集成进 Android。文档将“已实现能力”和“目标架构”分开描述。
 
-| 真问题 | Mova-AI 的回答 |
-|---|---|
-| **什么时候该出现？** | 把「要不要打扰用户」建模成**带代价的序列决策**，用上下文老虎机在线学习，而不是写死规则 |
-| **端侧小模型能扛多少？** | 定义**能力契约**：端侧只学「场景判断 → 意图分类 → 难度评估 → 路由建议 → 槽位抽取」，长生成与复杂推理上云 |
-| **什么时候必须上云？** | 把路由写成**代价敏感决策**：端侧省下的毫秒，折算成可接受的精度损失 |
-
-### 和普通套壳应用的正面对比
-
-| 维度 | 普通 AI 应用 | Mova-AI |
+| 技术问题 | 当前方案 | 当前状态 |
 |---|---|---|
-| 模型来源 | 调 API | 云端大模型当教师 → **蒸馏出端侧小模型** → 量化部署 |
-| 端侧能力 | 无（断网即废） | 端侧模型承担感知、判断与结构化抽取 |
-| 端云分工 | 无（全走云端） | **代价敏感级联路由**，按置信度动态决策 |
-| 路由依据 | `if (复杂) 上云` | 校准后的置信度 + 实测标定的延迟/代价权重 |
-| 输出可靠性 | 靠 prompt 祈祷 JSON | **语法约束解码 + 槽位校验**，失败自动升级 |
-| 可解释性 | 黑箱 | 每次决策都能回答"为什么走了云端" |
+| 如何定义小模型的任务边界？ | 以可执行 JSON 契约描述 `scene`、`intent`、`need_cloud`、复杂度与槽位 | 契约与校验器已实现 |
+| 如何构造足够覆盖任务边界的训练样本？ | 教师标注、契约校验、去重、分层抽样；SFT 前校验数据 ID、标签和数据摘要 | 试验流水线已跑通；服务器正式训练批次为 5500 条，评测集 500 条 |
+| 如何训练并衡量小模型？ | Qwen3-0.6B + LoRA，输出层级的监督微调；用独立预测文件评测合法率、分类、路由和槽位指标 | 50 条 smoke test 已通过；全量训练进行中 |
+| 什么时候升级云端？ | 基于置信度、复杂度、结构校验与延迟代价的路由规则 | Kotlin 路由策略已实现；置信度校准和端侧执行尚未接入 |
+
+项目的工程重点是**数据质量、输出契约、可复现训练与可审计评测**。LoRA SFT 是当前训练阶段；Logit/Feature 蒸馏、量化和 Android 端侧推理属于后续工作，不作为已完成能力展示。
 
 ---
 
 ## 二、系统架构
 
-```
-┌──────────────────────────── 端侧（Android · SceneAi_App）────────────────────────────┐
-│                                                                                       │
-│  感知层   相机 / 前台 App / 时间 / 位置 / 运动状态 / 网络状态                            │
-│     ↓                                                                                 │
-│  触发层   P(此刻需要 | 信号) × 上下文老虎机 × 打扰成本 → 要不要出现                      │
-│     ↓                                                                                 │
-│  推理层   视觉轻量分类器 ──┐                                                          │
-│          端侧 SLM（INT4）─┴─ 统一 Executor 接口                                        │
-│     ↓                                                                                 │
-│  路由层   置信度校准 → 代价敏感决策 → 语法约束解码 → 槽位校验 → 不够就升级云端           │
-│     ↓                                                                                 │
-│  交互层   结构化结果 / 「为什么现在出现」信号卡 / 技术面板 / 反馈回灌                     │
-│                                                                                       │
-└───────────────────────────────────┬───────────────────────────────────────────────────┘
-                                    │  HTTP + 契约化 JSON（含 meta：执行方式/耗时/路由原因）
-                                    ▼
-┌──────────────────────────── 云侧（scene_ai_server · FastAPI）────────────────────────┐
-│  在线服务   /health  /capabilities  /analyze_image  /reading/*  /chat/*                │
-│             Provider 抽象：DashScope ⇄ DeepSeek ⇄ 任意 OpenAI 兼容端点                 │
-│  离线流水线 数据引擎 → 三信号难度评估 → 去重 → 子模覆盖优化 → 配比求解                   │
-│             → Response / Logit / Feature 三层蒸馏 → 分层量化 → 端侧模型产物             │
-└───────────────────────────────────────────────────────────────────────────────────────┘
-                          ▲
-                          │  教师模型（自托管，承担 Teacher / Judge / Generator / 难度估计）
+```text
+当前可运行链路
+Android UI ── Retrofit/JSON 契约 ──> FastAPI ── Provider ──> 云端模型
+    ▲                                  │
+    └──────── 结构化结果 + meta ────────┘
+
+离线训练链路
+教师标注数据 ──> 契约校验/筛选 ──> JSONL SFT ──> Qwen3-0.6B + LoRA
+                                                  │
+                                                  └──> 500 条评测集
+
+目标端云链路（尚未端侧集成）
+Android 输入 ──> 端侧小模型 ──> 契约/置信度/复杂度校验
+                                    ├── 满足条件：本地处理
+                                    └── 低置信度或高复杂度：升级云端
 ```
 
-### 一条设计原则：端侧与云侧实现同一个 `Executor` 接口
+### 路由实现边界
 
-路由层不关心谁是本地谁是远程。好处是：加新执行器（比如 NPU 加速版）不改路由代码；评测时可以把云端换成 mock 做离线消融；端侧还没训好时挂一个"永远失败"的桩，就能先验证降级逻辑。
+`Router.kt` 已包含端云决策策略，但 `MovaRepository` 当前请求仍通过 Retrofit 调用服务端；端侧模型执行器、实测置信度校准和路由阈值标定尚未完成。因此当前客户端仍以云端推理为主，图中的端侧分支是目标路径，不代表已上线能力。
 
 ---
 
@@ -110,7 +90,7 @@
 | ![记录](docs/screenshots/08-记录.png) | ![技术面板](docs/screenshots/09-技术面板.png) | ![设置](docs/screenshots/10-设置.png) | ![关于](docs/screenshots/11-关于.png) |
 
 > 所有截图与动画均来自模拟器真实运行，非设计稿。几个值得注意的细节：
-> - **技术面板里的延迟拆解是真实测量值**（食材识别 577 ms / 动作生成 2.44 s），来自服务端返回的 `meta.stages`
+> - 技术面板的阶段耗时来自服务端 `meta.stages`；动画中的具体数值是录制时的单次运行结果，不是跨设备性能基准
 > - **端侧模型状态如实显示「未部署」**，并说明接入后会自动点亮端侧统计
 > - 位置提示卡片显示「规划中」，没有假装已实现
 
@@ -120,19 +100,16 @@
 
 ![分享入口](docs/screenshots/12-分享入口.png)
 
-**这是刻意选择的技术路线，不是能力妥协。** 另一条路是用 `AccessibilityService`
-（无障碍服务）读屏，它确实能自动感知"你正在用微信"、不需要手动分享，但代价是三条硬约束：
+聊天输入采用 Android 系统分享入口：用户在来源应用中主动选择内容，再分享给 Mova-AI。
+另一种设计是通过 `AccessibilityService` 读取其它应用界面；它能减少手动操作，但需要更广泛的界面访问权限，也更依赖来源应用的 UI 结构。
 
 | 维度 | 无障碍读屏 | 分享入口（本方案） |
 |---|---|---|
-| 微信服务协议 | 明确禁止自动化读取，账号可能被限制功能 | ✅ 不涉及 |
-| Android 13+ | 侧载应用默认**禁止开启无障碍**，需先手动允许「受限设置」 | ✅ 无额外门槛 |
-| 合规 | 读到的是**对方**发来的消息，上传云端涉及第三方个人信息 | ✅ 用户主动发起 |
-| 可靠性 | 微信改版就可能失效 | ✅ 走系统标准 Intent 协议 |
-| 实现成本 | 高（要适配各家 UI 变化） | 低 |
+| 用户操作 | 可减少手动分享 | 用户显式选择并分享内容 |
+| 数据范围 | 可能接触来源应用的更多界面信息 | 仅接收系统分享的内容 |
+| 维护成本 | 依赖来源应用 UI 结构 | 使用 Android 标准 Intent |
 
-结论：分享入口在合规、可靠性、成本三项上都更优，代价只是用户多一次点击。
-界面也会明确告诉用户"这是你主动分享的，App 不会读取其它应用的界面"。
+当前实现优先采用显式分享，以缩小数据范围并降低对第三方界面结构的耦合。界面会提示用户：内容由用户主动分享，App 不读取其它应用界面。
 
 ### 页面说明
 
@@ -147,7 +124,7 @@
 | 技术面板 | 会话统计、延迟拆解、端侧模型状态、最近请求与**路由原因**、导出日志 |
 | 设置 | 服务连接、主动智能（免打扰/敏感度）、端侧、外观、数据、关于 |
 
-> 技术面板刻意做成一级入口：它同时服务两类读者 —— 用户看"AI 做了什么决定"，面试官看"这个项目有什么技术含量"。
+> 技术面板是面向用户的可观测性界面：展示执行端、延迟拆解、端侧模型状态与路由原因。
 
 ---
 
@@ -244,32 +221,64 @@ App 内可以随时改：**设置 → 服务连接**，或**首启向导第 3 �
 
 ### 第 4 步（可选）：跑一遍数据引擎
 
-不需要显卡，也不需要安装任何第三方包 —— 数据引擎只用 Python 标准库：
+数据构造不需要 GPU，但需要可访问的教师模型服务和对应 API 配置。下面命令是仓库内的小规模流水线试跑：
 
 ```bash
 cd scene_ai_server
-python smoke_test.py --vision          # 先确认两个教师 Key 都通
+python smoke_test.py --vision          # 测试当前 Provider 的文本/视觉调用（视觉模型可选）
 python pipeline/build_dataset.py --limit 150 --budget 60
 python pipeline/evaluate.py --predictor teacher-b
 ```
 
-产物落在 `scene_ai_server/data/`，其中 `dataset_report.md` 与 `eval_report.md` 是自动生成的统计报告。
-标注结果有缓存，重复运行不会重复消耗 API 额度。
+这会生成早期 pilot 规模的数据集，不会复现服务器上的 5500/500 正式训练批次。产物落在 `scene_ai_server/data/`；教师调用有缓存，重复运行可复用已缓存的标注。
+
+### 第 5 步：运行 Qwen3-0.6B LoRA SFT
+
+训练需要支持 CUDA 的 PyTorch、Transformers、PEFT，以及本地 Qwen3-0.6B 底座权重。在线服务依赖与训练依赖分列在 `requirements.txt` 和 `requirements-train.txt` 中。正式训练数据保存在训练服务器上，不随 GitHub 仓库发布；`build_sft.py` 会校验正式数据批次的 MD5，仓库内 60 条 pilot 数据不能通过该正式批次校验。
+
+```bash
+cd scene_ai_server
+pip install -r requirements-train.txt
+# 将服务器正式批次放到 data/distill_dataset.jsonl，或通过 --input 指定路径
+python build_sft.py --input data/distill_dataset.jsonl --output data/sft_train.jsonl
+wc -l data/sft_train.jsonl       # 正式批次应为 5500 条
+python train_lora.py \
+  --base-model /path/to/Qwen3-0.6B \
+  --train-file data/sft_train.jsonl \
+  --output-dir data/model_output/qwen3-0.6b-lora
+```
+
+训练脚本默认 3 个 epoch、LoRA rank 16、BF16、最大序列长度 2048，并在每个 epoch 保存 adapter。全量模型评估需先用 `predict_lora.py` 生成预测，再通过 `pipeline/evaluate.py --predictor file` 计算指标。具体 CUDA/PyTorch 安装方式取决于训练机驱动与 CUDA 运行时。
+
+```bash
+python predict_lora.py \
+  --base-model /path/to/Qwen3-0.6B \
+  --adapter data/model_output/qwen3-0.6b-lora/epoch-1 \
+  --gold data/eval_gold.jsonl \
+  --output data/model_output/qwen3-0.6b-lora/epoch-1/predictions.jsonl
+python pipeline/evaluate.py \
+  --gold data/eval_gold.jsonl \
+  --predictor file \
+  --predictions data/model_output/qwen3-0.6b-lora/epoch-1/predictions.jsonl \
+  --out data/model_output/qwen3-0.6b-lora/epoch-1/eval_report.md
+```
 
 ---
 
 ## 六、接口文档
 
-基地址 `http://<host>:8000`。**所有响应都带 `meta` 段**：
+基地址 `http://<host>:8000`。业务分析接口在响应中附带 `meta`，用于记录模型、耗时、执行方式与路由原因；`/health` 和 `/capabilities` 返回服务状态与能力清单，不包含该字段：
 
 ```json
 {
-  "executor": "cloud",
-  "model": "qwen-vl-max+qwen3-max",
-  "latency_ms": 1240,
-  "route_reason": "端侧执行器未接入，本次直连云端",
-  "stages": { "recognize": 420, "generate": 820 },
-  "confidence": null
+  "meta": {
+    "executor": "cloud",
+    "model": "<configured-model>",
+    "latency_ms": 1240,
+    "route_reason": "端侧执行器未接入，本次直连云端",
+    "stages": { "recognize": 420, "generate": 820 },
+    "confidence": null
+  }
 }
 ```
 
@@ -300,9 +309,33 @@ python pipeline/evaluate.py --predictor teacher-b
 
 ---
 
-## 七、数据引擎（S1 + S2，已实际跑通）
+## 七、数据构造与训练数据
 
-端侧方案里最先落地的是**数据侧**——它不依赖显卡、不依赖 NDK，而且是后面所有训练的前提。
+数据链路分为两种规模：仓库提交的是用于验证数据引擎的 pilot 样本；当前正式 LoRA 训练批次在服务器侧生成和校验，避免把完整训练数据直接提交到公开仓库。
+
+### 正式训练批次（服务器侧）
+
+| 数据 | 数量 | 用途 |
+|---|---:|---|
+| `data/distill_dataset.jsonl` | 5500 | 教师标注的结构化场景理解 SFT 样本 |
+| `data/eval_gold.jsonl` | 500 | 分层评测；以教师标签为主，并对个别样本做人工修正 |
+| `data/sft_train_*.jsonl` | 5500 | `build_sft.py` 从正式数据转换得到的 user/assistant 对话 |
+
+正式训练集 MD5 为 `d32b73adbc456212f42eaae2099d93ee`，由 `build_sft.py` 默认校验。SFT 监督只作用于 assistant 侧的结构化 target；当前这轮是 **Qwen3-0.6B 的 LoRA SFT**，不是 Logit 或 Feature 蒸馏。评测集标签仍以教师标注为主，因此学生在该集合上的分数不能等同于人工标注基准上的绝对准确率。
+
+正式训练批次的场景构成：
+
+| 教师标签场景 | 样本数 | 占比 |
+|---|---:|---:|
+| food | 2148 | 39.1% |
+| reading | 1566 | 28.5% |
+| none | 646 | 11.7% |
+| location | 597 | 10.9% |
+| chat | 543 | 9.9% |
+
+### 数据引擎 pilot（仓库内报告）
+
+仓库内 `dataset_report.md` 和 `eval_report.md` 记录的是早期试跑：150 条种子候选，经筛选得到 60 条训练样本和 40 条评测样本。下面的覆盖率与教师一致率指标只描述这轮 pilot，不代表服务器上的 5500/500 正式批次。
 
 ```bash
 cd scene_ai_server
@@ -319,14 +352,14 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 | 阶段 | 指标 | 结果 |
 |---|---|---|
 | ③ 契约校验 | **契约合法率** | **100%**（150/150） |
-| ④ 难度评估 | 平均难度 / 三信号可用数 | 0.312 / 150·150·143 |
+| ④ 难度评估 | 平均难度 / 三信号可用数 | 0.312 / 150·150·143（教师置信度暂代学生探针损失） |
 | ⑤ 去重 | LSH 候选对 → 精确复核删除 | 274 → **22 条（14.7%）** |
 | ⑥ 覆盖优化 | 网格覆盖 | **37/37 格** |
 | ⑥ 覆盖优化 | 子模目标 F vs 随机基线 | 47.01 vs 39.71 → **提升 18.4%** |
 | ⑦ 配额配比 | 难度分布 vs 目标 (30/50/20) | **36.7% / 50.0% / 13.3%** |
-| 评测 | 标签噪声下限（教师B × 教师A 标注） | scene 87.2% / intent 82.0% / 槽位 F1 0.838 |
+| 40 条 pilot 评测 | 教师 B 对教师 A 标签的一致率 | scene 87.2% / intent 82.0% / 槽位 F1 0.838 |
 
-### 三个实测发现（写进文档，因为它们是流程真正的价值）
+### Pilot 阶段的三个问题与修正
 
 1. **契约枚举用了英文、prompt 又没列取值 → 合法率 0%。** 教师只能猜，输出「晚饭」而不是 `dinner`。修正后 100%。教训：*契约必须显式到模型能照抄的程度。*
 2. **`temperature=0` 会摧毁 logprobs。** 极低温度把分布压成 one-hot，接口返回的 `logprob` 恒为 0、候选恒为 -9999。因此标签（T=0，保证可复现）与软标签（T=1，保证分布有意义）**必须分成两次调用**。
@@ -334,7 +367,7 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 
 > 第 3 条对任何数据流水线都成立：**稀有类别必须显式保底，不能指望随机采样照顾它。**
 
-### 产物
+### Pilot 产物（随仓库提交）
 
 | 文件 | 内容 |
 |---|---|
@@ -344,33 +377,31 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 | `data/dataset_report.md` | 自动生成的统计报告 |
 | `data/eval_report.md` | 评测报告（标签噪声下限） |
 
-评测还暴露了一个有意思的现象：`none`（无场景/歧义输入）的分类准确率只有 **42.9%**，远低于其他场景 —— 这**反证了难度信号是有效的**：那些被判定为难的样本，确实是两个教师都拿不准的样本。
+在这 40 条 pilot 评测中，`none`（无场景/歧义输入）的教师间一致率较低（42.9%）。这是标注分歧的观察结果，不是对“难度信号有效性”的因果证明；后续需在正式评测集上重新验证。
 
 ---
 
-## 八、端侧模型方案（设计已完成，实现待推进）
+## 八、端侧模型路线图
 
 详细方案见 [`docs/02-端侧模型方案.md`](docs/02-端侧模型方案.md)，这里只给结论：
 
 | 环节 | 方案要点 |
 |---|---|
-| **能力契约** | 端侧只学感知/决策/抽取三类能力，**长生成与复杂推理留云端** |
-| **数据引擎** | 三信号客观难度（教师自一致性 × 学生探针损失 × 跨教师分歧）+ 子模覆盖优化（$1-1/e$ 保证）+ 线性规划配比 |
-| **三层蒸馏** | Response → **Logit（top-K logits 离线缓存，绕开显存限制）** → Feature（选做） |
-| **量化** | 分层敏感性分析 → **比特分配当背包问题求解**；embedding/lm_head 单独处理；KV cache 量化 |
-| **端侧运行时** | llama.cpp/GGUF 主线，LiteRT-LM 横评；目标机骁龙 8 Gen 3 **可走 Hexagon NPU** |
-| **可靠性** | **语法约束解码**保证 JSON 100% 合法 + 槽位校验兜底 |
-| **路由** | 温度缩放/等渗回归校准置信度 → 代价敏感决策（λ 由实测帕累托前沿反推） |
-| **进阶** | 任务级投机执行；端云投机解码 |
+| **能力契约** | 端侧候选任务为场景/意图识别、复杂度估计、路由建议与槽位抽取；长生成和复杂任务保留云端路径 |
+| **当前训练** | Qwen3-0.6B + LoRA，基于教师生成的结构化标签做 response-level SFT；全量训练已启动 |
+| **下一步评估** | 在 500 条分层评测集上计算契约合法率、scene/intent、need_cloud、complexity MAE、槽位 P/R/F1，并分析分场景错误 |
+| **蒸馏扩展** | 当前未实现 Logit/Feature 蒸馏；后续可评估 top-K logits 缓存和中间层表征蒸馏的收益与成本 |
+| **量化与运行时** | 端侧接入前再比较 GGUF/llama.cpp、LiteRT-LM 等方案，并按目标手机实测延迟、峰值内存和功耗 |
+| **路由校准** | 对模型置信度做校准，并用端侧/云端实测质量与延迟确定升级阈值；当前 Kotlin 决策逻辑尚未由端侧模型驱动 |
 
-> ⚠️ **诚实声明**：端侧模型**尚未部署到 App 中**。技术面板与设置页会如实显示"端侧模型未部署"，并在接入后自动点亮相关统计 —— 界面无需改动。
+> **当前边界**：端侧 adapter 尚未集成进 App，端侧推理、置信度校准、量化与真实端云级联效果尚无实测结果。
 
 ---
 
 ## 九、目录结构
 
 ```
-移动AI生活助手/
+Mova-AI/
 ├── docs/                                   # 📘 设计文档
 │   ├── 01-总体设计.md                       #    问题定义、级联路由框架、创新点、实验设计、路线图
 │   ├── 02-端侧模型方案.md                    #    能力契约、数据引擎、三层蒸馏、量化、运行时、路由
@@ -383,7 +414,7 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 │   │   ├── config.py                       #    配置（唯一读环境变量的地方）
 │   │   ├── providers.py                    #    厂商适配（唯一发请求的地方）
 │   │   └── prompts.py                      #    提示词（唯一写 prompt 的地方）
-│   ├── pipeline/                           #    🔬 离线数据引擎（零第三方依赖）
+│   ├── pipeline/                           #    🔬 教师调用、数据筛选、契约校验与评测
 │   │   ├── contract.py                     #      S1 能力契约 + JSON Schema + 校验器
 │   │   ├── seeds.py                        #      场景种子库（按组轮转采样）
 │   │   ├── teacher.py                      #      双教师客户端（含 logprobs 捕获）
@@ -394,6 +425,9 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 │   │   ├── build_dataset.py                #      主流程 + 报告生成
 │   │   └── evaluate.py                     #      评测（含标签噪声下限）
 │   ├── data/                               #    产物：数据集 / 评测集 / 报告（cache 已忽略）
+│   ├── build_sft.py                         #    将教师标注转换为 chat-format SFT JSONL
+│   ├── train_lora.py                        #    Qwen3-0.6B LoRA SFT 训练
+│   ├── predict_lora.py                      #    加载底座与 adapter 生成评测预测
 │   ├── requirements.txt · requirements-train.txt
 │   └── .env.example
 │
@@ -413,11 +447,11 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 
 ## 十、实现进度
 
-图例：✅ 已完成　🟡 进行中　⬜ 未开始（方案已设计）
+图例：✅ 已验证　🟡 进行中　⬜ 未开始或仅有设计
 
 | 层 | 模块 | 状态 |
 |---|---|---|
-| 端·交互 | Compose 多页应用（8 个页面） | ✅ **编译通过，产出 APK** |
+| 端·交互 | Compose 多页面应用 | ✅ **编译通过，产出 APK** |
 | 端·交互 | 首启向导（价值 → 权限 → 连接检测） | ✅ |
 | 端·交互 | 结构化结果渲染（全面取代 Toast） | ✅ |
 | 端·交互 | 一键示例（三个场景各一份，冷启动友好） | ✅ |
@@ -434,9 +468,11 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 | 云·在线 | Provider 抽象（DashScope ⇄ DeepSeek ⇄ 自建） | ✅ |
 | 云·在线 | 魔数校验、体积上限、重试退避、结构化日志、CORS | ✅ |
 | 云·离线 | **S1 能力契约**（可执行契约 + JSON Schema + 校验器） | ✅ |
-| 云·离线 | **S2 数据引擎**（双教师标注 → 三信号难度 → MinHash 去重 → 子模覆盖 → 配额配比） | ✅ |
-| 云·离线 | 评测脚本 + 评测集 v1 + 标签噪声下限 | ✅ |
-| 云·离线 | 三层蒸馏训练（Response / Logit / Feature） | ⬜ |
+| 云·离线 | **数据引擎 pilot**（教师标注 → 难度/质量信号 → MinHash 去重 → 覆盖选择 → 配额补齐） | ✅ 150 条种子试跑 |
+| 云·离线 | 正式 SFT 数据准备（5500 train / 500 eval） | ✅ 服务器侧校验完成 |
+| 云·离线 | Qwen3-0.6B LoRA response-level SFT | 🟡 全量训练已启动；smoke test 已通过 |
+| 云·离线 | 预测生成与契约评测脚本 | ✅；正式模型指标待训练完成后补充 |
+| 云·离线 | Logit / Feature 蒸馏 | ⬜ 当前训练未使用软标签或中间层特征 |
 | 云·离线 | 量化（分层敏感性 + 背包比特分配） | ⬜ |
 | 工程 | 单元测试与仪器测试 | ⬜ |
 
@@ -445,17 +481,16 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 ## 十一、已知限制
 
 - **端侧模型未接入**：当前所有推理都在云端完成；`Router` 已实现完整规则，端侧就绪后自动生效
-- **数据规模是演示级**：数据集为 60 条、评测集 40 条，用于跑通并验证流水线；流水线本身可线性扩展
-- **评测标签未经人工核验**：`eval_gold.jsonl` 是教师标注的，因此只能测「标签噪声下限」（两个教师的一致率 82–87%），不能当作绝对精度
-- **软标签与硬标签序列不完全对齐**：对话式 API 无法对指定前缀做 teacher forcing 取分布，当前软标签取自 T=1 的自回归生成；换成自托管 vLLM 用 `prompt_logprobs` 可消除
-- **聊天辅助靠「分享」接入，不做自动读屏**：这是主动放弃的能力，不是未完成项。
-  无障碍读屏能自动感知微信并读屏，但违反微信服务协议、在 Android 13+ 上需要用户
-  手动解除「受限设置」、且涉及第三方个人信息合规。详见上文对比表
+- **仓库 pilot 与正式训练数据不同**：仓库跟踪 60 条训练样本和 40 条评测样本；服务器正式批次为 5500/500，正式数据未提交到 GitHub。公开报告中的 pilot 指标不能替代正式批次评估
+- **评测标签仍不等于人工基准**：500 条正式评测样本以教师标注为主，仅个别样本人工修正；需要增加独立人工复核后，才能报告更强的绝对准确率结论
+- **当前只做 response-level SFT**：训练脚本仅对 assistant target 计算交叉熵；没有进行 Logit/Feature 蒸馏，也未量化
+- **端侧模型尚未接入**：当前 Android 请求仍走 FastAPI 云端服务。`Router` 决策代码已存在，但端侧执行器、模型置信度校准和实测路由阈值尚未完成
+- **聊天辅助通过系统分享接入**：不实现后台读取其它应用界面；这是出于数据范围和 UI 耦合考虑所作的产品选择
 - **场景自动触发未实现**：位置感知、悬浮窗、上下文老虎机触发决策仍是设计稿
   （`Router.kt` 里的代价敏感决策规则已实现，只是端侧执行器尚未接入）
 - **服务端无鉴权**：任何能访问到端口的人都能消耗你的模型额度，**切勿直接暴露到公网**
 - **明文 HTTP**：`network_security_config.xml` 为本地联调放开了明文流量，上线前需收紧
-- **无自动化测试**：`test/` 与 `androidTest/` 目前为空
+- **自动化测试覆盖不足**：当前仓库尚未提供可覆盖核心业务链路的单元测试与仪器测试
 - **release 未开混淆**：开启前需为 kotlinx.serialization / Retrofit 补 keep 规则
 
 ---
@@ -464,12 +499,12 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 
 | 事项 | 说明 |
 |---|---|
-| **仓库路径含中文** | 本仓库路径为 `移动AI生活助手`，AGP 默认会拒绝含非 ASCII 路径的构建。已在 `gradle.properties` 中设置 `android.overridePathCheck=true`（实测 JDK 21 + AGP 8.13.1 可正常构建）。若你移到纯英文路径，可以删掉这一行 |
+| **仓库路径** | 仓库目录名为 `Mova-AI`。Gradle 配置保留了 `android.overridePathCheck=true`，用于兼容含非 ASCII 字符的上级目录；建议仍优先使用英文路径 |
 | **调试密钥** | AGP 默认在 `~/.android/` 自动生成调试密钥，在受限环境（沙箱 / 无家目录写权限的 CI）会失败。这里改为使用仓库内置的 `SceneAi_App/keystore/debug.keystore`，其口令就是 Android 约定的 `android`，**不具备任何保密性**，仅供本地安装调试；release 请另行配置签名 |
 | **Gradle 发行版** | `gradle-wrapper.properties` 默认使用阿里云镜像（文件里注释了官方地址与腾讯镜像）。之所以默认镜像：在部分网络环境下 JVM 直连 `services.gradle.org` 会在 TLS 握手阶段收到 Connection reset，而镜像站稳定可用 |
 | **模型密钥** | 只放在服务端 `.env` 或环境变量里，**App 端永远不内置任何 Key** |
 | **PDF 解析** | 默认只解析前 3 页（`MOVA_MAX_PDF_PAGES`），扫描件因无可提取文字会返回 422 并提示改用截图识别 |
-| **离线流水线的依赖** | `pipeline/` 下的数据引擎**零第三方依赖**，只用标准库即可运行；`requirements-train.txt` 里的 PyTorch 等是后续训练阶段才需要 |
+| **数据与训练依赖** | 教师调用需要服务端 Provider 依赖和 API 配置；训练额外需要与机器 CUDA 环境匹配的 PyTorch、Transformers、PEFT 等，见 `requirements-train.txt` |
 
 ---
 
