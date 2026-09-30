@@ -239,12 +239,15 @@ python pipeline/evaluate.py --predictor teacher-b
 ```bash
 cd scene_ai_server
 pip install -r requirements-train.txt
-# 将服务器正式批次放到 data/distill_dataset.jsonl，或通过 --input 指定路径
-python build_sft.py --input data/distill_dataset.jsonl --output data/sft_train.jsonl
-wc -l data/sft_train.jsonl       # 正式批次应为 5500 条
+# 显式使用正式批次；仓库内同名文件只有 60 条 pilot，不要覆盖它
+TRAIN=/path/to/formal/distill_dataset.jsonl
+test "$(wc -l < "$TRAIN")" -eq 5500
+md5sum "$TRAIN"  # 应为 d32b73adbc456212f42eaae2099d93ee
+python build_sft.py --input "$TRAIN" --output data/model_output/sft_train.jsonl
+wc -l data/model_output/sft_train.jsonl  # 应为 5500 条
 python train_lora.py \
   --base-model /path/to/Qwen3-0.6B \
-  --train-file data/sft_train.jsonl \
+  --train-file data/model_output/sft_train.jsonl \
   --output-dir data/model_output/qwen3-0.6b-lora
 ```
 
@@ -413,6 +416,8 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 | `data/eval_report.md` | 评测报告（标签噪声下限） |
 
 在这 40 条 pilot 评测中，`none`（无场景/歧义输入）的教师间一致率较低（42.9%）。这是标注分歧的观察结果，不是对“难度信号有效性”的因果证明；后续需在正式评测集上重新验证。
+
+人工抽检、教师端点诊断和分层子集抽取工具见 [`tools/README.md`](tools/README.md)。其中抽检与子集抽取均按教师标签分层；正式批次需显式指定对应的数据文件。
 
 ---
 

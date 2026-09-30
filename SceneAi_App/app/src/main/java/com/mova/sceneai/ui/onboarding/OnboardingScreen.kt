@@ -305,7 +305,7 @@ private fun ConnectPage(
             value = state.baseUrl,
             onValueChange = onUrlChange,
             label = { Text("服务地址") },
-            placeholder = { Text("http://192.168.1.10:8000/") },
+            placeholder = { Text("http://xxx.xxx.xxx.xxx:8000/") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             supportingText = {

@@ -38,7 +38,7 @@ fun Throwable.toUiError(baseUrl: String? = null): UiError = when (this) {
     is UnknownHostException -> UiError(
         title = "找不到这个服务地址",
         detail = "手机无法解析「${baseUrl ?: "当前地址"}」，通常是地址写错了，或者手机没联网。",
-        hint = "地址格式应类似 http://192.168.1.10:8000/",
+        hint = "地址格式应类似 http://xxx.xxx.xxx.xxx:8000/",
         actionLabel = "去设置",
         action = ErrorAction.OpenSettings,
         retryable = false,
