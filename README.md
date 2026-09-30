@@ -251,14 +251,20 @@ python train_lora.py \
 训练脚本默认 3 个 epoch、LoRA rank 16、BF16、最大序列长度 2048，并在每个 epoch 保存 adapter。全量模型评估需先用 `predict_lora.py` 生成预测，再通过 `pipeline/evaluate.py --predictor file` 计算指标。具体 CUDA/PyTorch 安装方式取决于训练机驱动与 CUDA 运行时。
 不传 `--adapter` 时，`predict_lora.py` 会直接评估未微调底座，供三个 LoRA checkpoint 对照；正式评测请使用服务器上的 500 条 gold。
 
+**评测数据版本检查：**仓库跟踪的 `data/eval_gold.jsonl` 只有 40 条 pilot 样本，不能用于正式的 500 条结果复算。运行正式评测时，先将 `GOLD` 指向下载的正式文件，并核对行数与 MD5；本次训练的正式文件 MD5 是 `27a33ffbf5d2dd01d391533cb0443f3c`。
+
 ```bash
+GOLD=/path/to/formal/eval_gold.jsonl
+test "$(wc -l < "$GOLD")" -eq 500
+md5sum "$GOLD"  # 应为 27a33ffbf5d2dd01d391533cb0443f3c
+
 python predict_lora.py \
   --base-model /path/to/Qwen3-0.6B \
   --adapter data/model_output/qwen3-0.6b-lora/epoch-1 \
-  --gold data/eval_gold.jsonl \
+  --gold "$GOLD" \
   --output data/model_output/qwen3-0.6b-lora/epoch-1/predictions.jsonl
 python pipeline/evaluate.py \
-  --gold data/eval_gold.jsonl \
+  --gold "$GOLD" \
   --predictor file \
   --predictions data/model_output/qwen3-0.6b-lora/epoch-1/predictions.jsonl \
   --out data/model_output/qwen3-0.6b-lora/epoch-1/eval_report.md
