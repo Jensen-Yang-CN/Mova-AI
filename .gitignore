@@ -45,5 +45,6 @@ config.local.*
 
 # ==================== 数据流水线的中间产物 ====================
 # 标注缓存体积大且可重新生成（重跑不会重复消耗 API 额度），不入库。
-# 最终数据集 / 评测集 / 报告**会**入库 —— 它们是流水线确实跑过的证据。
+# 仓库保留公开的 pilot 数据与报告；下载到 model_output 的正式评测产物留在本地。
 scene_ai_server/data/cache/
+scene_ai_server/data/model_output/
