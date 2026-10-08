@@ -1,4 +1,4 @@
-"""独立定向测试：生成审核表、锁定人工 gold、评估预测。只使用标准库。"""
+"""独立定向测试：生成审核表、记录复核来源、锁定 gold、评估预测。只使用标准库。"""
 
 from __future__ import annotations
 
@@ -90,14 +90,14 @@ def validate_labels(row: dict[str, Any]) -> None:
         if field not in ("scene", "intent", "need_cloud") and not field.startswith("slots."):
             raise ValueError(f"{row['id']} 未定义检查字段：{field}")
         if field.startswith("slots.") and field.removeprefix("slots.") not in slots:
-            raise ValueError(f"{row['id']} 检查字段 {field} 没有人工标签")
+            raise ValueError(f"{row['id']} 检查字段 {field} 没有复核标签")
         if field == "need_cloud" and not isinstance(row.get("need_cloud"), bool):
             raise ValueError(f"{row['id']} 检查 need_cloud 前须填写 true/false")
 
 
 def draft(args: argparse.Namespace) -> None:
     if args.out.exists():
-        raise FileExistsError(f"审核表已存在，避免覆盖人工修改：{args.out}")
+        raise FileExistsError(f"审核表已存在，避免覆盖已有修改：{args.out}")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=REVIEW_FIELDS, delimiter="\t")
@@ -111,7 +111,7 @@ def draft(args: argparse.Namespace) -> None:
                 "slots_json": json.dumps(item["slots"], ensure_ascii=False),
                 "checks": ";".join(item["checks"]), "审核": "", "备注": "",
             })
-    print(f"已写出 150 条待人工复核探针：{args.out}")
+    print(f"已写出 150 条待复核探针：{args.out}")
     print("逐条核对标签，必要时修改；最后在“审核”列填写“通过”或“修正”。")
 
 
@@ -129,7 +129,9 @@ def read_review(path: Path) -> list[dict[str, Any]]:
     rows = []
     for r in raw:
         if r["审核"].strip() not in ("通过", "修正"):
-            raise ValueError(f"{r['id']} 尚未人工审核；“审核”列只能填“通过”或“修正”")
+            raise ValueError(f"{r['id']} 尚未审核；“审核”列只能填“通过”或“修正”")
+        if r["审核"].strip() == "修正" and not r["备注"].strip():
+            raise ValueError(f"{r['id']} 修正后必须在“备注”列说明依据")
         cloud = r["need_cloud"].strip().lower()
         if cloud not in ("", "true", "false"):
             raise ValueError(f"{r['id']} need_cloud 只能留空或填 true/false")
@@ -156,7 +158,7 @@ def read_review(path: Path) -> list[dict[str, Any]]:
 def check_overlap(
     rows: list[dict[str, Any]], train: list[dict[str, Any]], prior: list[dict[str, Any]], report: Path
 ) -> tuple[int, int]:
-    """精确重合禁止入集；近重复列出供人工确认。"""
+    """精确重合禁止入集；近重复列出供复核。"""
     references = [("train", r) for r in train] + [("prior_gold", r) for r in prior]
     refs = [(origin, str(r.get("id", "")), str(r.get("utterance", ""))) for origin, r in references]
     exact = defaultdict(list)
@@ -203,6 +205,8 @@ def finalize(args: argparse.Namespace) -> None:
     if args.gold.exists():
         raise FileExistsError(f"gold 已存在；请另存新版本，勿覆盖已锁定测试集：{args.gold}")
     rows = read_review(args.review)
+    if args.reviewer == "human" and any(r["review_note"].startswith("AI复核") for r in rows):
+        raise ValueError("审核表记录为 AI 复核，不能用 --reviewer human 标记；如需人工金标准请重新逐条审核")
     if md5(args.train_file) != TRAIN_MD5 or md5(args.prior_gold) != PRIOR_GOLD_MD5:
         raise ValueError("正式 5500/500 数据 MD5 不匹配；不能拿仓库 60/40 pilot 做独立性检查")
     train, prior = read_jsonl(args.train_file), read_jsonl(args.prior_gold)
@@ -217,7 +221,7 @@ def finalize(args: argparse.Namespace) -> None:
         raise ValueError("存在完全重复话语；请改写审核表后重新锁定")
     if near and not args.approve_near:
         raise ValueError("发现近重复；请检查报告，改写样本或确认后加 --approve-near 重跑")
-    # 近重复只作为人工排查线索；允许继续时在 manifest 中保留数量。
+    # 近重复只作为审阅线索；允许继续时在 manifest 中保留数量。
     gold = []
     for row in rows:
         expected = {"scene": row["scene"], "intent": row["intent"], "slots": row["slots"]}
@@ -226,7 +230,8 @@ def finalize(args: argparse.Namespace) -> None:
         gold.append({
             "id": row["id"], "family": row["family"], "signals": row["signals"],
             "utterance": row["utterance"], "expected": expected,
-            "checks": row["checks"], "human_reviewed": True,
+            "checks": row["checks"], "reviewer": args.reviewer,
+            "human_reviewed": args.reviewer == "human",
             "review_note": row["review_note"],
         })
     args.gold.parent.mkdir(parents=True, exist_ok=True)
@@ -236,7 +241,8 @@ def finalize(args: argparse.Namespace) -> None:
     manifest = {
         "gold_sha256": hashlib.sha256(args.gold.read_bytes()).hexdigest(),
         "train_md5": TRAIN_MD5, "prior_gold_md5": PRIOR_GOLD_MD5,
-        "total": len(gold), "signal_variants": len({r["signals"] for r in gold}),
+        "total": len(gold), "reviewer": args.reviewer,
+        "signal_variants": len({r["signals"] for r in gold}),
         "need_cloud_labeled": sum("need_cloud" in r["expected"] for r in gold),
         "families": dict(sorted(Counter(r["family"] for r in gold).items())),
         "exact_overlap": exact, "near_overlap_to_review": near,
@@ -244,9 +250,9 @@ def finalize(args: argparse.Namespace) -> None:
     args.gold.with_suffix(".manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    print(f"已锁定人工 gold：{args.gold}；SHA-256 {manifest['gold_sha256']}")
+    print(f"已锁定 {args.reviewer} 复核 gold：{args.gold}；SHA-256 {manifest['gold_sha256']}")
     if near:
-        print("请人工查看近重复报告；如发现语义近复制，另建 gold 版本并排除相关样本。")
+        print("请审阅近重复报告；如发现语义近复制，另建 gold 版本并排除相关样本。")
 
 
 def load_predictions(path: Path, gold_ids: set[str]) -> dict[str, str]:
@@ -274,8 +280,19 @@ def field_ok(field: str, actual: dict[str, Any], expected: dict[str, Any]) -> bo
 
 def score(args: argparse.Namespace) -> None:
     gold = read_jsonl(args.gold)
-    if len(gold) != 150 or not all(r.get("human_reviewed") is True for r in gold):
-        raise ValueError("只能评测已经人工复核并锁定的 150 条 gold")
+    if len(gold) != 150 or any(
+        r.get("reviewer") not in ("human", "ai")
+        or r.get("human_reviewed") is not (r["reviewer"] == "human")
+        or r["reviewer"] != gold[0]["reviewer"] for r in gold
+    ):
+        raise ValueError("只能评测带真实复核来源的 150 条 gold")
+    manifest_path = args.gold.with_suffix(".manifest.json")
+    if not manifest_path.is_file():
+        raise ValueError(f"缺少锁定清单：{manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    gold_sha256 = hashlib.sha256(args.gold.read_bytes()).hexdigest()
+    if manifest.get("gold_sha256") != gold_sha256 or manifest.get("reviewer") != gold[0]["reviewer"]:
+        raise ValueError("gold 与锁定清单不一致，不能评分")
     if len({r["id"] for r in gold}) != len(gold):
         raise ValueError("gold ID 重复")
     predictions = load_predictions(args.predictions, {r["id"] for r in gold})
@@ -317,7 +334,8 @@ def score(args: argparse.Namespace) -> None:
                 json.dumps(actual.get("slots", {}), ensure_ascii=False),
             ))
     report = {
-        "gold_sha256": hashlib.sha256(args.gold.read_bytes()).hexdigest(),
+        "gold_sha256": gold_sha256,
+        "reviewer": gold[0]["reviewer"],
         "total": len(gold),
         "contract_valid": int(correct["contract"]),
         "contract_valid_rate": round(correct["contract"] / len(gold), 4),
@@ -342,6 +360,7 @@ def score(args: argparse.Namespace) -> None:
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     lines = ["# 独立定向测试", "", f"- gold SHA-256：`{report['gold_sha256']}`",
+             f"- 标签复核来源：`{report['reviewer']}`",
              f"- 契约合法率：{report['contract_valid']}/{len(gold)}（{report['contract_valid_rate']:.1%}）",
              "- 所有准确率以完整测试集为分母；无效输出计错，不沿用旧评测的‘仅合法输出’分母。", ""]
     for field, stats in report["field_accuracy_all_rows"].items():
@@ -367,15 +386,16 @@ def main() -> None:
     p = subs.add_parser("draft", help="生成待审核 TSV，不生成 gold")
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(func=draft)
-    p = subs.add_parser("finalize", help="人工审核后查重并锁定 gold")
+    p = subs.add_parser("finalize", help="复核后查重并锁定 gold")
     p.add_argument("--review", type=Path, required=True)
     p.add_argument("--train-file", type=Path, required=True, help="正式 5500 条训练源，不接受 pilot")
     p.add_argument("--prior-gold", type=Path, required=True, help="正式 500 条旧评测集，不接受 pilot")
     p.add_argument("--gold", type=Path, required=True)
     p.add_argument("--overlap-report", type=Path, required=True)
-    p.add_argument("--approve-near", action="store_true", help="人工检查近重复报告后才可使用")
+    p.add_argument("--reviewer", choices=("human", "ai"), required=True, help="如实记录复核来源")
+    p.add_argument("--approve-near", action="store_true", help="检查近重复报告后才可使用")
     p.set_defaults(func=finalize)
-    p = subs.add_parser("score", help="按人工 gold 对预测做严格分族评测")
+    p = subs.add_parser("score", help="按已锁定 gold 对预测做严格分族评测")
     p.add_argument("--gold", type=Path, required=True)
     p.add_argument("--predictions", type=Path, required=True)
     p.add_argument("--out-dir", type=Path, required=True)

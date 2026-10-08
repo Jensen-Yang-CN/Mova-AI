@@ -1,4 +1,4 @@
-"""人工复核前的定向探针草案；这些标签不是教师生成的 gold。"""
+"""独立复核前的定向探针草案；这些标签不是教师生成的 gold。"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ SIGNALS = (
 
 
 def build_cases() -> list[dict[str, Any]]:
-    """按问题族构造 150 条草案；人工审核后才能转成正式测试集。"""
+    """按问题族构造 150 条草案；复核并查重后才能转成测试集。"""
     rows: list[dict[str, Any]] = []
 
     def add(
@@ -81,24 +81,24 @@ def build_cases() -> list[dict[str, Any]]:
     # 用户自述的当前位置覆盖环境信号；未列入枚举的地点应归“其他”。
     other_places = (
         ("奶茶店", "我在奶茶店等人，二十分钟后提醒我去拿包裹。", "timing_reminder"),
-        ("影城", "刚到影城，散场后附近哪里能顺路买水？", "nearby_hint"),
+        ("影城", "刚到影城，附近现在有营业的店能买水吗？", "nearby_hint"),
         ("邮局", "我在邮局排队，半小时后提醒我打电话。", "timing_reminder"),
-        ("牙科诊所", "现在在牙科诊所，结束后附近有地方吃点东西吗？", "nearby_hint"),
+        ("牙科诊所", "现在在牙科诊所，附近有营业的地方能吃点东西吗？", "nearby_hint"),
         ("图书馆", "我正在图书馆，离开前提醒我还书。", "timing_reminder"),
-        ("停车场", "车停在停车场，附近顺路有洗车的地方吗？", "nearby_hint"),
+        ("停车场", "我在停车场取车，附近顺路有洗车的地方吗？", "nearby_hint"),
         ("眼镜店", "我在眼镜店配镜，四十分钟后提醒我回来取。", "timing_reminder"),
-        ("理发店", "刚进理发店，附近能顺便取快递吗？", "nearby_hint"),
+        ("理发店", "刚进理发店，附近现在有营业的快递驿站吗？", "nearby_hint"),
         ("博物馆", "我在博物馆，闭馆前半小时提醒我去出口。", "timing_reminder"),
-        ("宠物医院", "现在在宠物医院，附近有卖宠物用品的吗？", "nearby_hint"),
+        ("宠物医院", "现在在宠物医院，附近有营业的宠物用品店吗？", "nearby_hint"),
         ("银行网点", "我在银行网点等号，十五分钟后提醒我看叫号。", "timing_reminder"),
-        ("药店", "我在药店，附近有没有顺路的打印店？", "nearby_hint"),
+        ("药店", "我在药店，附近现在有营业的打印店吗？", "nearby_hint"),
         ("花店", "我在花店挑花，十分钟后提醒我去接人。", "timing_reminder"),
-        ("健身房", "我正在健身房，附近能顺路买一瓶水吗？", "nearby_hint"),
+        ("健身房", "我正在健身房，附近现在有营业的店能买水吗？", "nearby_hint"),
         ("社区服务中心", "我在社区服务中心办事，三点前提醒我取号。", "timing_reminder"),
         ("快递驿站", "刚到快递驿站，附近还有什么可以顺路办的？", "nearby_hint"),
         ("洗衣店", "我在洗衣店等衣服，二十分钟后提醒我回来。", "timing_reminder"),
-        ("公园", "我在公园散步，附近哪里能顺路买饮料？", "nearby_hint"),
-        ("派出所", "现在在派出所，办完后附近能复印材料吗？", "nearby_hint"),
+        ("公园", "我在公园散步，附近现在有营业的店能买饮料吗？", "nearby_hint"),
+        ("派出所", "现在在派出所，附近有营业的复印店吗？", "nearby_hint"),
         ("游泳馆", "我在游泳馆，六点半提醒我出发回家。", "timing_reminder"),
     )
     for _place, utterance, intent in other_places:
@@ -108,17 +108,17 @@ def build_cases() -> list[dict[str, Any]]:
     near_enum = (
         ("我在火锅店等位，附近还有什么顺路可办？", "餐厅", "nearby_hint"),
         ("现在在面馆，十分钟后提醒我回公司。", "餐厅", "timing_reminder"),
-        ("坐在食堂里，吃完后附近能买文具吗？", "餐厅", "nearby_hint"),
+        ("坐在食堂里，附近现在有营业的文具店吗？", "餐厅", "nearby_hint"),
         ("我到地铁站了，五分钟后提醒我检票。", "交通枢纽", "timing_reminder"),
-        ("人在高铁候车厅，附近能顺路买充电线吗？", "交通枢纽", "nearby_hint"),
+        ("人在高铁候车厅，附近现在有营业的店能买充电线吗？", "交通枢纽", "nearby_hint"),
         ("我在机场航站楼，登机前半小时提醒我。", "交通枢纽", "timing_reminder"),
         ("现在站在校门口，附近有可顺路办的事吗？", "校园", "nearby_hint"),
         ("我在教学楼，下午四点提醒我去取书。", "校园", "timing_reminder"),
-        ("刚回宿舍楼，附近哪里能买到笔记本？", "校园", "nearby_hint"),
+        ("刚回学校宿舍楼，附近现在有营业的店能买到笔记本吗？", "校园", "nearby_hint"),
         ("我在生鲜超市挑菜，十分钟后提醒我结账。", "超市", "timing_reminder"),
         ("人在连锁超市，附近还有什么能顺路买的？", "超市", "nearby_hint"),
         ("我在大型超市，半小时后提醒我去停车区。", "超市", "timing_reminder"),
-        ("到了购物中心，附近有顺路的服务台吗？", "商场", "nearby_hint"),
+        ("到了购物中心，里面的服务台现在开放吗？", "商场", "nearby_hint"),
         ("我在百货商场，二十分钟后提醒我去出口。", "商场", "timing_reminder"),
         ("人在商业综合体，附近还能顺便逛什么？", "商场", "nearby_hint"),
     )
@@ -129,13 +129,13 @@ def build_cases() -> list[dict[str, Any]]:
     # 目的地即使更显眼，也不能覆盖用户明确自述的当前位置。
     destination_cases = (
         ("我现在在校园，去机场要几点出发才来得及？", "校园", "timing_reminder"),
-        ("我人在商场，附近顺路去药店方便吗？", "商场", "nearby_hint"),
+        ("我人在商场，附近现在有营业的药店吗？", "商场", "nearby_hint"),
         ("目前在超市，去火车站前提醒我先结账。", "超市", "timing_reminder"),
         ("我在餐厅吃饭，附近能顺道去银行吗？", "餐厅", "nearby_hint"),
         ("正在地铁站，去图书馆前十分钟提醒我。", "交通枢纽", "timing_reminder"),
         ("我在校园门口，附近有没有去商场顺路的地方？", "校园", "nearby_hint"),
         ("人在购物中心，去学校之前提醒我买水。", "商场", "timing_reminder"),
-        ("我现在在超市，去医院路上有顺路的打印店吗？", "超市", "nearby_hint"),
+        ("我现在在超市，去医院路上有营业的打印店吗？", "超市", "nearby_hint"),
         ("正在面馆，去机场前半小时提醒我出门。", "餐厅", "timing_reminder"),
         ("我在候车厅，附近有没有去邮局顺路的路线？", "交通枢纽", "nearby_hint"),
         ("现在在教学楼，去餐厅前提醒我把书带上。", "校园", "timing_reminder"),
@@ -152,7 +152,7 @@ def build_cases() -> list[dict[str, Any]]:
         "上级": (
             "领导突然让我周末值班，我想推迟，帮我回一句。",
             "主管问我项目什么时候交，帮我写句礼貌回复。",
-            "导师催我改论文，我想先解释进度，该怎么回？",
+            "课题组负责人催我改论文，我想先解释进度，该怎么回？",
             "部门经理要我提前汇报，帮我回复说需要一天准备。",
             "直属负责人邀请我加班，帮我委婉拒绝。",
             "老板问我能否临时出差，帮我回一句说明安排冲突。",
@@ -163,7 +163,7 @@ def build_cases() -> list[dict[str, Any]]:
             "室友又把东西放在我桌上，帮我写一句不伤和气的话。",
             "同学想借我的笔记，我想明天再给，怎么回复？",
             "邻居问我能否帮忙收快递，帮我婉拒。",
-            "项目搭档要改分工，我希望先讨论，帮我回一句。",
+            "同组项目搭档要改分工，我希望先讨论，帮我回一句。",
         ),
         "陌生人": (
             "客户反复催报价，我需要先确认，帮我回一句。",
@@ -252,16 +252,31 @@ def build_cases() -> list[dict[str, Any]]:
         ("把这张截图的文字内容概括一下。", "reading", "summarize", {}),
         ("这份阅读材料先说个大意即可。", "reading", "summarize", {}),
         ("我写的‘你必须今天给我’，语气能调得礼貌一点吗？", "chat", "tone_adjust", {}),
-        ("‘收到，随便吧’这句回复听着太冷，帮我改柔和些。", "chat", "rewrite", {}),
-        ("这句话显得生硬，帮我改成更自然的说法。", "chat", "rewrite", {}),
+        ("‘收到，随便吧’这句回复太短，帮我改写成信息完整的答复。", "chat", "rewrite", {}),
+        ("把‘我到时再跟你说’改写成一条信息完整的回复。", "chat", "rewrite", {}),
         ("给朋友的消息想轻松一点，帮我调整语气。", "chat", "tone_adjust", {}),
         ("我在商场，十分钟后提醒我去地下停车区。", "location", "timing_reminder", {"place_type": "商场"}),
-        ("现在在校园，附近哪里能顺路买到笔？", "location", "nearby_hint", {"place_type": "校园"}),
+        ("现在在校园，附近有营业的店能买到笔吗？", "location", "nearby_hint", {"place_type": "校园"}),
         ("我在地铁站，下一趟车前提醒我取票。", "location", "timing_reminder", {"place_type": "交通枢纽"}),
     )
     for utterance, scene, intent, slots in context_cases:
         checks = ("scene", "intent", "slots.place_type") if slots else ("scene", "intent")
         add("new_context", utterance, scene, intent, slots=slots, checks=checks)
+
+    # 上云标签只覆盖判定依据明确的样本：本地定时提醒不需要云端；
+    # 明确查询附近店铺当前营业/开放情况需要外部实时信息。
+    local_reminder_ids = {16, 18, 22, 26, 28, 30, 32, 35, 37, 39, 43, 45, 47, 49, 148}
+    live_poi_ids = {17, 19, 23, 25, 27, 29, 33, 34, 38, 40, 44, 48, 52, 58, 149}
+    for row in rows:
+        number = int(row["id"].removeprefix("indep_"))
+        if number in local_reminder_ids:
+            assert row["intent"] == "timing_reminder"
+            row["need_cloud"] = False
+        elif number in live_poi_ids:
+            assert row["intent"] == "nearby_hint" and "现在" in row["utterance"]
+            row["need_cloud"] = True
+        if row["need_cloud"] is not None:
+            row["checks"].append("need_cloud")
 
     assert len(rows) == 150, f"定向探针数量异常：{len(rows)}"
     assert len({r["utterance"] for r in rows}) == len(rows), "存在重复话语"

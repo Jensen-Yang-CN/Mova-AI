@@ -7,6 +7,6 @@
 | `export_review.py` | 按教师 `expected.scene/intent` 分层抽取人工抽检清单 |
 | `probe_teacher.py` | 对教师端点比较提示、token 预算和关闭思考模式的效果；会发起真实请求 |
 | `slice_1k.py` | 按教师 `target.scene/intent` 与难度分层抽取训练子集，供后续 1K/5.5K 对比实验 |
-| `independent_cases.py` + `independent_eval.py` | 生成 150 条待人工审核的定向探针，核对正式数据独立性并评测 epoch-2/3；步骤见 [`docs/07-独立测试操作.md`](../docs/07-独立测试操作.md) |
+| `independent_cases.py` + `independent_eval.py` | 生成 150 条定向探针，记录 AI/人工复核来源，核对正式数据独立性并评测 epoch-2/3；步骤见 [`docs/07-独立测试操作.md`](../docs/07-独立测试操作.md) |
 
 旧目录中的 `apply_*_patch.py` 是一次性迁移脚本，其修改已进入 `scene_ai_server/pipeline/` 正式代码。不要再次执行这些补丁。旧 Runbook 包含过时规模与内部环境路径，保留在旧目录供历史对照。
