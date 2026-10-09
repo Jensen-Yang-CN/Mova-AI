@@ -1,6 +1,11 @@
 {
   "data_note": "500 条为教师标签评测；150 条为 AI 复核压力题，均非独立人工金标准",
   "description": "Mova-AI 端侧决策模型；非短信正文生成模型",
+  "f16_gguf": {
+    "bytes": 1198182176,
+    "file": "qwen3-0.6b-epoch3-f16.gguf",
+    "sha256": "a8ea90350ea14d24da87362dfb3b1981e6e149bb437ae7f949aa9d09f42c1fca"
+  },
   "formal500": {
     "round1": {
       "base": {
@@ -115,6 +120,20 @@
       "total": 500
     }
   },
+  "merged_hf": {
+    "adapter_sha256": "7cad244a7d47a65a2a4b8ab9884b0bab1fe28386f52e76a9c87d1bade20cb215",
+    "base_model_sha256": "f47f71177f32bcd101b7573ec9171e6a57f4f4d31148d38e382306f42996874b",
+    "peft": "0.21.1",
+    "torch": "2.10.0+cu128",
+    "transformers": "5.12.1",
+    "weights": [
+      {
+        "bytes": 1192135096,
+        "file": "model.safetensors",
+        "sha256": "b4f418d62f38caaeff0491ac675200cae29e8655e6e708b5531d0b7019dda9ba"
+      }
+    ]
+  },
   "provenance": {
     "independent_gold": {
       "exact_overlap": 0,
@@ -176,6 +195,11 @@
         "reading/summarize": 484
       }
     }
+  },
+  "q4_k_m_gguf": {
+    "bytes": 396704544,
+    "file": "qwen3-0.6b-epoch3-Q4_K_M.gguf",
+    "sha256": "0c5f1a05e36f49556a9457a51523e87a1dc7aec9f7f1ad00e1c027b0ad051d92"
   },
   "run_config": {
     "round1": {

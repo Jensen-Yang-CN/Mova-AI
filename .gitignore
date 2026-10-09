@@ -48,6 +48,8 @@ config.local.*
 # 仓库保留公开的 pilot 数据与报告；下载到 model_output 的正式评测产物留在本地。
 scene_ai_server/data/cache/
 scene_ai_server/data/model_output/
+# 训练、转换与推理的原始日志可能包含服务器绝对路径，只在本地留存。
+scene_ai_server/data/train_logs/
 # 人工复核表、锁定的独立 gold 与模型预测仅保存在本地/训练服务器。
 scene_ai_server/data/independent_eval/
 # 第二轮生成的正式混合训练源包含服务器数据，不提交公开仓库。
