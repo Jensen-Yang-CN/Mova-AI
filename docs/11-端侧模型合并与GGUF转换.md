@@ -126,3 +126,30 @@ echo "inference_exit=${PIPESTATUS[0]}"
 `need_cloud=true` 的含义是：端侧模型认为此请求需要云端生成。单独运行 GGUF 只会输出决策 JSON，**不会自动调用 `/chat/reply`、也不会产生短信正文**。现有 FastAPI 已实现云端生成接口，Android App 当前仍直接走云端；GGUF 执行、契约校验及 `need_cloud` 到云端接口的连接尚待实现。接入后应展示云端返回的 `reply` 给用户，而不是把路由 JSON 当作聊天结果。
 
 本节只证明量化文件可以在服务器 CPU 加载和推理，不宣称移动端部署或真实用户集准确率。正式数据、预测、权重与含绝对路径的原始日志保留在私有数据目录；公开仓库只保留代码、脱敏的聚合指标和摘要。训练采用 Qwen3 `enable_thinking=False`；Qwen3 官方说明默认 llama.cpp 聊天模板不直接暴露这一硬开关，Android 集成要继续保证相同前缀。
+
+## 7. 从训练容器下载产物时的权限
+
+训练容器以 `root` 写入共享目录，WinSCP 通过另一个账号读取同一份文件；容器里的 `/root/kube-user/...` 与 WinSCP 展示的共享存储路径不是相同的容器内路径。若 WinSCP 报 `Permission denied`，应在**训练容器中的实际文件路径**检查权限，不要在容器内使用 WinSCP 展示的 `/home/ubuntu/data/...`，也不要假定容器内存在 `ubuntu` 用户。
+
+以下命令只给本次要下载的文件及其直接目录添加 SFTP 组读取权限。执行前应确认 WinSCP 账号的 GID 为 `1000`；本次会话中已经核实为 `1000`。命令不递归修改整个权重目录，也不改变文件所有者。
+
+```bash
+cd "$HOME/kube-user/CodeBase_YangJunjie/Mova_AI/scene_ai_server"
+RELEASE=data/model_output/qwen3-0.6b-release-v1
+DIRS=("$RELEASE" "$RELEASE/merged_hf" data/train_logs)
+FILES=(
+  "$RELEASE/qwen3-0.6b-epoch3-Q4_K_M.gguf"
+  "$RELEASE/merged_hf/merge_manifest.json"
+  data/train_logs/merge_epoch3.log
+  data/train_logs/convert_epoch3_f16.log
+  data/train_logs/quantize_epoch3_q4km.log
+  data/train_logs/gguf_q4_smoke.log
+)
+for file in "${FILES[@]}"; do test -f "$file" || echo "缺少文件：$file"; done
+chgrp 1000 "${DIRS[@]}" "${FILES[@]}" && \
+  chmod g+rx "${DIRS[@]}" && \
+  chmod g+r "${FILES[@]}" && \
+  stat -c 'owner=%u:%g mode=%A path=%n' "${DIRS[@]}" "${FILES[@]}"
+```
+
+WinSCP 只需下载 Q4_K_M GGUF、`merge_manifest.json` 和四份日志；无需下载整个 `merged_hf` 目录。原始 manifest 与日志可能含服务器路径，下载后仍放在本地忽略的 `data/model_output/` 中，公开仓库只使用脱敏摘要。若 `chgrp` 失败，应保留错误输出定位共享存储权限，不要对整个数据目录使用 `chmod -R 777`。
