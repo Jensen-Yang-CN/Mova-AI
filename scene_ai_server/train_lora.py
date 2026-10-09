@@ -1,7 +1,8 @@
-"""Supervised LoRA fine-tuning for Mova-AI's edge decision contract.
+"""对 Qwen3-0.6B 执行端侧决策契约的 LoRA 监督微调。
 
-Uses the local Transformers + PEFT stack and reads JSONL directly. No `datasets`
-dependency is required. Training loss is applied only to assistant response tokens.
+直接读取 build_sft.py 生成的 JSONL，不依赖 datasets。训练目标是结构化
+场景、意图、上云判断与槽位，而不是短信、菜谱等长文本。只对 assistant
+JSON 的 token 计算损失，user 提示部分用 -100 屏蔽。
 """
 from __future__ import annotations
 
@@ -21,9 +22,12 @@ SERVER_DIR = Path(__file__).resolve().parent
 DEFAULT_DATA = SERVER_DIR / "data/sft_train.jsonl"
 DEFAULT_OUTPUT = SERVER_DIR / "data/model_output/qwen3-0.6b-lora"
 TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
-
+# 前四个是注意力投影层；后三个是前馈网络层。仅训练这些模块的 LoRA 增量，
+# 底座参数保持冻结，因此可训练参数约占总参数量的 1.665%。
 
 class SFTDataset(Dataset):
+    """构造模型输入，并严格保持训练/推理共用的 Qwen3 非思考模式前缀。"""
+
     def __init__(self, path: Path, tokenizer: Any, max_length: int, limit: int | None = None):
         self.items: list[dict[str, Any]] = []
         with path.open("r", encoding="utf-8") as handle:
@@ -50,17 +54,15 @@ class SFTDataset(Dataset):
                         "请先检查 Qwen3 tokenizer/template"
                     )
 
-                # Tokenize the prompt and assistant suffix separately. BPE can merge
-                # characters across this boundary (for example, the final newline
-                # in the prompt and the opening '{' of a JSON response), so tokenizing
-                # the full text and comparing token prefixes can falsely report a
-                # template mismatch. Keeping the prompt IDs from apply_chat_template
-                # also makes training use exactly the prefix used during inference.
+                # 文本前缀一致即可；不能要求完整对话 token ID 以 prompt token ID 开头。
+                # BPE 可能跨「提示末尾换行 / JSON 开头左花括号」边界合并 token，
+                # 从而误报模板不一致。分别编码提示与 assistant 后缀，既规避误报，
+                # 又让训练输入与推理时 apply_chat_template 的前缀保持相同。
                 prompt_encoding = tokenizer.apply_chat_template(
                     messages[:1], tokenize=True, add_generation_prompt=True, enable_thinking=False
                 )
-                # Recent Transformers versions may return a BatchEncoding instead
-                # of a bare token-ID list. Extract input_ids before concatenation.
+                # Transformers 版本不同，返回值可能是 token ID 列表或 BatchEncoding；
+                # 必须先取出 input_ids，不能把 BatchEncoding 与 list 直接相加。
                 if hasattr(prompt_encoding, "keys") and "input_ids" in prompt_encoding:
                     prompt_ids = prompt_encoding["input_ids"]
                 else:
@@ -76,6 +78,7 @@ class SFTDataset(Dataset):
                 if response_ids and isinstance(response_ids[0], list):
                     response_ids = response_ids[0]
                 full_ids = prompt_ids + response_ids
+                # 静默截断可能只留下提示、丢掉完整 JSON 标签，因此宁可中止训练。
                 if len(full_ids) > max_length:
                     raise ValueError(
                         f"{row.get('id')} 长度 {len(full_ids)} 超过 max_length={max_length}；"
@@ -103,6 +106,8 @@ class SFTDataset(Dataset):
 
 
 class CausalCollator:
+    """动态填充批次；padding 与 user 提示对应的标签均为 -100。"""
+
     def __init__(self, pad_token_id: int):
         self.pad_token_id = pad_token_id
 
@@ -155,6 +160,7 @@ def main() -> int:
     print(f"GPU={torch.cuda.get_device_name(0)} free={free_bytes / 2**30:.1f} GiB total={total_bytes / 2**30:.1f} GiB")
     if free_bytes < 40 * 2**30:
         parser.error("当前实时空闲显存低于 40 GiB；先重新确认共享 GPU 状态")
+    # 这里限制的是本进程 PyTorch allocator 的上限；并非给任务独占整卡。
     torch.cuda.set_per_process_memory_fraction(args.memory_fraction, 0)
 
     random.seed(args.seed)
@@ -184,6 +190,7 @@ def main() -> int:
         attn_implementation="sdpa",
     )
     model.config.use_cache = False
+    # 重算激活以换显存；这会增加部分计算量，但适合共享 GPU 的 40 GiB 预算。
     model.gradient_checkpointing_enable()
     if hasattr(model, "enable_input_require_grads"):
         model.enable_input_require_grads()
@@ -233,6 +240,8 @@ def main() -> int:
                 loss = model(**batch).loss
             running += float(loss.detach())
             remainder = len(loader) % args.gradient_accumulation_steps
+            # epoch 尾部不足一个完整梯度累积窗口时，按实际微批次数归一化，
+            # 防止最后一次更新的梯度被额外缩小。
             active_accumulation = (
                 remainder
                 if remainder and step >= len(loader) - remainder
@@ -251,10 +260,12 @@ def main() -> int:
                     print(f"epoch={epoch + 1} step={global_step}/{total_steps} loss={running / (step + 1):.4f} peak={peak:.2f} GiB")
 
         epoch_dir = args.output_dir / f"epoch-{epoch + 1}"
+        # 每轮分别保存 adapter 与 tokenizer，便于独立评测和回退选模。
         epoch_dir.mkdir(parents=True, exist_ok=True)
         model.save_pretrained(epoch_dir, safe_serialization=True)
         tokenizer.save_pretrained(epoch_dir)
         avg_loss = running / max(1, len(loader))
+        # peak 是 PyTorch 本进程峰值已分配张量显存，不是 nvidia-smi 整卡占用。
         print(f"saved={epoch_dir} epoch={epoch + 1} avg_loss={avg_loss:.4f} peak={torch.cuda.max_memory_allocated() / 2**30:.2f} GiB")
         torch.cuda.reset_peak_memory_stats()
 

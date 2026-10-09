@@ -15,16 +15,17 @@
 
 Mova-AI 聚焦一个移动端工程问题：**如何把场景识别、意图判断和结构化信息抽取等高频轻任务交给小模型，同时为低置信度或高复杂度任务保留云端升级路径。**
 
-当前项目包含 Android 客户端、FastAPI 在线服务和离线训练流水线。在线能力目前由云端模型提供；Qwen3-0.6B 的三轮 LoRA 监督微调、500 条教师标签评测，以及 150 条 AI 复核新话语压力测试已完成。后者暴露出位置枚举与实时信息上云判断的系统性错误；人工标注金标准与 Android 端侧集成尚未完成。文档将“已实现能力”和“目标架构”分开描述。
+当前项目包含 Android 客户端、FastAPI 在线服务和离线训练流水线。在线回复目前由云端模型生成；Qwen3-0.6B 已完成**两轮 LoRA 训练**（每轮 3 epoch）、500 条教师标签评测和 150 条 AI 复核话语压力测试。选定第一轮 epoch-3 后，已完成 LoRA 合并、F16 GGUF 转换、Q4_K_M 量化与服务器 CPU 单条推理；Android 端侧执行器和端云级联尚未接入。文档将“已实现能力”和“目标架构”分开描述。
 
 | 技术问题 | 当前方案 | 当前状态 |
 |---|---|---|
 | 如何定义小模型的任务边界？ | 以可执行 JSON 契约描述 `scene`、`intent`、`need_cloud`、复杂度与槽位 | 契约与校验器已实现 |
 | 如何构造足够覆盖任务边界的训练样本？ | 教师标注、契约校验、去重、分层抽样；SFT 前校验数据 ID、标签和数据摘要 | 试验流水线已跑通；服务器正式训练批次为 5500 条，评测集 500 条 |
-| 如何训练并衡量小模型？ | Qwen3-0.6B + LoRA，输出层级的监督微调；用独立预测文件评测合法率、分类、路由和槽位指标 | 5500 条训练、500 条教师标签评测及 150 条新话语压力测试已完成；关键边界需修复，人工标注测试待做 |
+| 如何训练并衡量小模型？ | Qwen3-0.6B + LoRA，输出层级的监督微调；用独立预测文件评测合法率、分类、路由和槽位指标 | 第一轮 5500 条、第二轮 5704 条；两轮评测完成，选用第一轮 epoch-3；人工标注测试待做 |
 | 什么时候升级云端？ | 基于置信度、复杂度、结构校验与延迟代价的路由规则 | Kotlin 路由策略已实现；置信度校准和端侧执行尚未接入 |
+| 如何得到可部署模型？ | 选定 LoRA → 合并权重 → F16 GGUF → Q4_K_M → CPU 冒烟推理 | 服务器流程已完成；量化文件约 379 MB，Android 实机尚未验证 |
 
-项目的工程重点是**数据质量、输出契约、可复现训练与可审计评测**。LoRA SFT 和教师标签评测已完成，下一步是边界错误复核、新测试集与端侧验证；Logit/Feature 蒸馏、量化和 Android 端侧推理属于后续工作，不作为已完成能力展示。
+项目的工程重点是**数据质量、输出契约、可复现训练与可审计评测**。端侧模型学习的是场景/意图、复杂度、上云判断和槽位，**不是短信、菜谱或摘要正文生成器**。需要长文本时，App 应根据端侧决策调用现有云端生成接口并展示最终内容。当前 GGUF 只在服务器 CPU 完成单条推理，Android 接入仍是下一项工程工作；Logit/Feature 蒸馏没有实施。
 
 ---
 
@@ -38,18 +39,18 @@ Android UI ── Retrofit/JSON 契约 ──> FastAPI ── Provider ──> �
 
 离线训练链路
 教师标注数据 ──> 契约校验/筛选 ──> JSONL SFT ──> Qwen3-0.6B + LoRA
-                                                  │
-                                                  └──> 500 条评测集
+                                                  ├──> 500 条评测集 / 150 条压力测试
+                                                  └──> 合并 HF → F16 GGUF → Q4_K_M
 
 目标端云链路（尚未端侧集成）
 Android 输入 ──> 端侧小模型 ──> 契约/置信度/复杂度校验
                                     ├── 满足条件：本地处理
-                                    └── 低置信度或高复杂度：升级云端
+                                    └── need_cloud=true / 低置信度 / 高复杂度：云端生成正文
 ```
 
 ### 路由实现边界
 
-`Router.kt` 已包含端云决策策略，但 `MovaRepository` 当前请求仍通过 Retrofit 调用服务端；端侧模型执行器、实测置信度校准和路由阈值标定尚未完成。因此当前客户端仍以云端推理为主，图中的端侧分支是目标路径，不代表已上线能力。
+`Router.kt` 已包含端云决策策略，但 `MovaRepository` 当前请求仍通过 Retrofit 调用服务端；端侧模型执行器尚未接入，`need_cloud` 也尚未驱动 App 的实际生成链路。服务器 CPU 上的 GGUF 推理成功不等于 Android 端侧已上线。模型给出路由 JSON 后，聊天用户最终还应看到云端返回的 `reply` 正文。
 
 ---
 
@@ -234,11 +235,12 @@ python pipeline/evaluate.py --predictor teacher-b
 
 ### 第 5 步：运行 Qwen3-0.6B LoRA SFT
 
-训练需要支持 CUDA 的 PyTorch、Transformers、PEFT，以及本地 Qwen3-0.6B 底座权重。在线服务依赖与训练依赖分列在 `requirements.txt` 和 `requirements-train.txt` 中。正式训练数据保存在训练服务器上，不随 GitHub 仓库发布；`build_sft.py` 会校验正式数据批次的 MD5，仓库内 60 条 pilot 数据不能通过该正式批次校验。
+训练需要支持 CUDA 的 PyTorch、Transformers、PEFT，以及本地 Qwen3-0.6B 底座权重。服务器已验证组合为 PyTorch `2.10.0+cu128`、Transformers `5.12.1`、PEFT `0.21.1`、Accelerate `1.15.0`；先按机器 CUDA 环境安装 PyTorch，再安装本轮专用 `requirements-lora.txt`。`requirements-train.txt` 是较宽的可选离线实验依赖清单，不等于本轮训练环境锁文件，避免在已验证环境中直接全量安装。正式训练数据保存在训练服务器上，不随 GitHub 仓库发布；`build_sft.py` 会校验正式数据批次的 MD5，仓库内 60 条 pilot 数据不能通过该正式批次校验。
 
 ```bash
 cd scene_ai_server
-pip install -r requirements-train.txt
+# 先准备与本机 CUDA 匹配的 PyTorch，再安装本轮验证过的包组合
+python -m pip install -r requirements-lora.txt
 # 显式使用正式批次；仓库内同名文件只有 60 条 pilot，不要覆盖它
 TRAIN=/path/to/formal/distill_dataset.jsonl
 test "$(wc -l < "$TRAIN")" -eq 5500
@@ -272,6 +274,10 @@ python pipeline/evaluate.py \
   --predictions data/model_output/qwen3-0.6b-lora/epoch-1/predictions.jsonl \
   --out data/model_output/qwen3-0.6b-lora/epoch-1/eval_report.md
 ```
+
+### 第 6 步：导出选定模型并做 GGUF 冒烟推理
+
+两轮训练的对比结果见[第二轮回归审计](docs/10-第二轮训练回归审计.md)。原型选用**第一轮 epoch-3**，合并 LoRA、转换 F16 GGUF、量化为 Q4_K_M、以训练同款 Qwen3 非思考模板做单条 CPU 推理的完整命令见[端侧模型导出记录](docs/11-端侧模型合并与GGUF转换.md)。`prepare_gguf_prompt.py` 负责构造不含 gold 标签的推理输入。此流程验证模型文件可运行；Android 端侧接入仍未完成。
 
 ---
 
@@ -367,7 +373,7 @@ python pipeline/evaluate.py \
 | epoch-2 | 100% | 99.0% | 97.4% | 93.2% | 95.7% |
 | epoch-3 | 100% | 99.6% | 97.0% | 93.2% | 96.3% |
 
-准确率以契约合法输出为分母，因此底座的准确率仅覆盖 434 条合法预测。epoch-3 在 scene、槽位和复杂度指标上较好，可作为下一轮验证候选；其上云判断仍错 34/500 条，`confidence` 尚未校准。这份教师标签评测不能替代真实用户和新上下文的独立测试。
+准确率以契约合法输出为分母，因此底座的准确率仅覆盖 434 条合法预测。第一轮 epoch-3 的上云判断错 34/500 条，`confidence` 尚未校准。第二轮 epoch-2 在同一 500 条教师 gold 上 scene 为 99.8%、intent 为 95.6%、need_cloud 为 92.8%、槽位 F1 为 96.26%；它改善部分定向压力题，却在阅读意图和上云判断上回退，因此原型继续选用第一轮 epoch-3。详见[第二轮回归审计](docs/10-第二轮训练回归审计.md)。这些分数不能替代真实用户的独立人工测试。
 
 ### 150 条新话语压力测试
 
@@ -432,13 +438,13 @@ python pipeline/build_dataset.py --limit 150 --budget 60
 | 环节 | 方案要点 |
 |---|---|
 | **能力契约** | 端侧候选任务为场景/意图识别、复杂度估计、路由建议与槽位抽取；长生成和复杂任务保留云端路径 |
-| **当前训练** | Qwen3-0.6B + LoRA，基于教师生成的结构化标签做 response-level SFT；三轮训练及 500 条教师标签评测完成 |
-| **下一步评估** | 人工复核上云误判及 reading/none 边界，构造新上下文与真实表述测试集，比较 epoch-2/3 的端侧表现 |
+| **当前训练** | Qwen3-0.6B + LoRA；第一轮 5500 条、第二轮 5704 条，每轮 3 epoch；选定第一轮 epoch-3 |
+| **评估边界** | 500 条教师 gold 与 150 条 AI 复核压力题已完成；有上云误判和标签边界，尚未建立独立人工金标准 |
 | **蒸馏扩展** | 当前未实现 Logit/Feature 蒸馏；后续可评估 top-K logits 缓存和中间层表征蒸馏的收益与成本 |
-| **量化与运行时** | 端侧接入前再比较 GGUF/llama.cpp、LiteRT-LM 等方案，并按目标手机实测延迟、峰值内存和功耗 |
+| **量化与运行时** | 已完成合并 HF → F16 GGUF → Q4_K_M（约 379 MB）及服务器 CPU 单条推理；手机端实测待做 |
 | **路由校准** | 对模型置信度做校准，并用端侧/云端实测质量与延迟确定升级阈值；当前 Kotlin 决策逻辑尚未由端侧模型驱动 |
 
-> **当前边界**：端侧 adapter 尚未集成进 App，端侧推理、置信度校准、量化与真实端云级联效果尚无实测结果。
+> **当前边界**：GGUF 文件已生成并在服务器 CPU 推理；Android 执行器、`need_cloud` 到云端生成的接线、置信度校准与手机性能测试尚未完成。模型输出的是决策 JSON，不是直接给用户发送的回复文本。
 
 ---
 
@@ -472,7 +478,9 @@ Mova-AI/
 │   ├── build_sft.py                         #    将教师标注转换为 chat-format SFT JSONL
 │   ├── train_lora.py                        #    Qwen3-0.6B LoRA SFT 训练
 │   ├── predict_lora.py                      #    加载底座与 adapter 生成评测预测
-│   ├── requirements.txt · requirements-train.txt
+│   ├── merge_lora.py                        #    将选定 adapter 安全合并进底座
+│   ├── prepare_gguf_prompt.py               #    构造与训练一致的 GGUF 冒烟提示
+│   ├── requirements.txt · requirements-lora.txt · requirements-train.txt
 │   └── .env.example
 │
 ├── SceneAi_App/                            # 📱 Android 端（Kotlin + Compose，单 Activity）
@@ -514,23 +522,25 @@ Mova-AI/
 | 云·离线 | **S1 能力契约**（可执行契约 + JSON Schema + 校验器） | ✅ |
 | 云·离线 | **数据引擎 pilot**（教师标注 → 难度/质量信号 → MinHash 去重 → 覆盖选择 → 配额补齐） | ✅ 150 条种子试跑 |
 | 云·离线 | 正式 SFT 数据准备（5500 train / 500 eval） | ✅ 服务器侧校验完成 |
-| 云·离线 | Qwen3-0.6B LoRA response-level SFT | ✅ 50 条 smoke 与 5500 条正式训练完成；3 个 epoch adapter 已保存 |
-| 云·离线 | 预测生成与契约评测脚本 | ✅ 底座及 3 个 adapter 各 500 条预测、epoch-2/3 各 150 条新话语预测完成并复算；端侧验证待做 |
-| 云·离线 | 独立定向测试（150 条新话语探针、复核来源与查重工具） | ✅ AI 复核、正式数据查重、gold 锁定与 epoch-2/3 评测完成；6/10 个问题族未达门槛，待修复与人工标注验证 |
+| 云·离线 | Qwen3-0.6B LoRA response-level SFT | ✅ 第一轮 5500 条、第二轮 5704 条，各 3 epoch；第一轮 epoch-3 用于导出 |
+| 云·离线 | 预测生成与契约评测脚本 | ✅ 底座及第一轮 3 个 adapter 各 500 条预测、第二轮 epoch-2 500 条预测，以及两轮定向回归均已复算 |
+| 云·离线 | 独立定向测试（150 条新话语探针、复核来源与查重工具） | ✅ AI 复核、正式数据查重、gold 锁定与两轮回归完成；不能冒充人工金标准 |
 | 云·离线 | Logit / Feature 蒸馏 | ⬜ 当前训练未使用软标签或中间层特征 |
-| 云·离线 | 量化（分层敏感性 + 背包比特分配） | ⬜ |
+| 云·离线 | LoRA 合并、GGUF 转换、Q4_K_M 量化 | ✅ 约 1.2 GB F16 → 约 379 MB Q4_K_M；服务器 CPU 单条推理成功 |
+| 端·推理 | Android 加载 GGUF 并联通云端生成 | ⬜ 下一项工程工作 |
 | 工程 | 单元测试与仪器测试 | ⬜ |
 
 ---
 
 ## 十一、已知限制
 
-- **端侧模型未接入**：当前所有推理都在云端完成；`Router` 已实现完整规则，端侧就绪后自动生效
+- **端侧模型未接入**：当前 App 的在线请求仍通过 FastAPI 云端完成；`Router` 已实现部分决策规则，但尚未消费 GGUF 模型的输出，不能宣称端云级联已跑通
 - **仓库 pilot 与正式训练数据不同**：仓库跟踪 60 条训练样本和 40 条评测样本；服务器正式批次为 5500/500，正式数据未提交到 GitHub。公开报告中的 pilot 指标不能替代正式批次评估
 - **评测标签仍不等于人工基准**：500 条正式评测样本以教师标注为主，仅个别样本人工修正；需要增加独立人工复核后，才能报告更强的绝对准确率结论
 - **路由置信度未校准**：epoch-3 在教师标签集上有 34/500 条 `need_cloud` 误判；新话语测试中 150 条预测的 `confidence` 全为 0.95，包括全部 40 条全字段错误样本。不能把原始置信度直接当成可靠的放行阈值
-- **当前只做 response-level SFT**：训练脚本仅对 assistant target 计算交叉熵；没有进行 Logit/Feature 蒸馏，也未量化
-- **端侧模型尚未接入**：当前 Android 请求仍走 FastAPI 云端服务。`Router` 决策代码已存在，但端侧执行器、模型置信度校准和实测路由阈值尚未完成
+- **当前只做 response-level SFT**：训练脚本仅对 assistant target 计算交叉熵；没有进行 Logit/Feature 蒸馏。后处理采用标准 Q4_K_M 量化，未执行分层敏感性或自定义混合比特优化
+- **量化验证范围**：Q4_K_M 已在服务器 CPU 加载并产生合法 JSON；单条案例有一个语气槽位与教师 gold 不同。手机端速度、内存和输出质量尚未测试
+- **回复正文由云端生成**：端侧 `need_cloud=true` 尚未接到 App 的生成链路；现有 `/chat/reply` 能生成可展示的 `reply`，但单独运行 GGUF 只会得到路由 JSON
 - **聊天辅助通过系统分享接入**：不实现后台读取其它应用界面；这是出于数据范围和 UI 耦合考虑所作的产品选择
 - **场景自动触发未实现**：位置感知、悬浮窗、上下文老虎机触发决策仍是设计稿
   （`Router.kt` 里的代价敏感决策规则已实现，只是端侧执行器尚未接入）
@@ -550,7 +560,7 @@ Mova-AI/
 | **Gradle 发行版** | `gradle-wrapper.properties` 默认使用阿里云镜像（文件里注释了官方地址与腾讯镜像）。之所以默认镜像：在部分网络环境下 JVM 直连 `services.gradle.org` 会在 TLS 握手阶段收到 Connection reset，而镜像站稳定可用 |
 | **模型密钥** | 只放在服务端 `.env` 或环境变量里，**App 端永远不内置任何 Key** |
 | **PDF 解析** | 默认只解析前 3 页（`MOVA_MAX_PDF_PAGES`），扫描件因无可提取文字会返回 422 并提示改用截图识别 |
-| **数据与训练依赖** | 教师调用需要服务端 Provider 依赖和 API 配置；训练额外需要与机器 CUDA 环境匹配的 PyTorch、Transformers、PEFT 等，见 `requirements-train.txt` |
+| **数据与训练依赖** | 教师调用需要服务端 Provider 依赖和 API 配置；本轮 LoRA 训练先装 CUDA 匹配的 PyTorch，再用 `requirements-lora.txt`；`requirements-train.txt` 是扩展实验清单 |
 
 ---
 
@@ -566,6 +576,11 @@ Mova-AI/
 | [`docs/06-阶段二训练记录.md`](docs/06-阶段二训练记录.md) | **阶段二实战**：共享 GPU 配置、模型上传/环境/tokenizer 故障、修复步骤、训练与四组正式评测结果 |
 | [`docs/07-独立测试操作.md`](docs/07-独立测试操作.md) | 150 条 AI 复核定向探针、正式 5500/500 查重、epoch-2/3 评测操作 |
 | [`docs/08-独立定向测试结果.md`](docs/08-独立定向测试结果.md) | 首轮新话语压力测试结果、位置与上云判断错误分析、下一轮修复方向 |
+| [`docs/09-第二轮定向补数与训练.md`](docs/09-第二轮定向补数与训练.md) | 第二轮新增 204 条数据、5704 条混合训练源及复现命令 |
+| [`docs/10-第二轮训练回归审计.md`](docs/10-第二轮训练回归审计.md) | 第二轮 150 条回归和 500 条正式 gold 对比、第一轮 epoch-3 选模依据 |
+| [`docs/11-端侧模型合并与GGUF转换.md`](docs/11-端侧模型合并与GGUF转换.md) | LoRA 合并、F16 GGUF、Q4_K_M 量化与服务器 CPU 推理命令和结果 |
+| [`docs/12-端云接入与模型发布计划.md`](docs/12-端云接入与模型发布计划.md) | 端侧 JSON 与云端回复正文的职责边界、Android 接入闭环和公开产物范围 |
+| [`artifacts/release-v1/`](artifacts/release-v1/) | 脱敏聚合指标、训练批次摘要及 Qwen3 底座许可证 |
 | [`docs/archive/`](docs/archive) | 早期方案存档（已被上面几份取代，保留以记录设计演进） |
 
 ---

@@ -1,0 +1,8 @@
+# -*- coding: utf-8 -*-
+# 本轮 Qwen3-0.6B LoRA SFT / 预测 / 合并实际验证的 Python 包版本。
+# 先按训练机 CUDA 版本安装 PyTorch（本轮为 2.10.0+cu128），再安装本文件；
+# 不要让 pip 为了补依赖把已有 CUDA 版 PyTorch 换成其他构建。
+# 数据集直接由标准库读取 JSONL，不需要 datasets / trl / bitsandbytes。
+transformers==5.12.1
+peft==0.21.1
+accelerate==1.15.0

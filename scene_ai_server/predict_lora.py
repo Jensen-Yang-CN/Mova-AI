@@ -1,4 +1,9 @@
-"""Generate prediction JSONL from the Qwen3 base model or a saved LoRA adapter."""
+"""用 Qwen3 底座或指定 LoRA adapter 生成逐条评测预测。
+
+输入 gold 只提供案例话语与环境信号；模型不会看到 expected 标签。
+输出 ``{id, text}`` JSONL 交给 pipeline/evaluate.py 独立评分。
+本脚本沿用训练时的契约提示和 enable_thinking=False，避免模板漂移。
+"""
 from __future__ import annotations
 
 import argparse
@@ -41,6 +46,7 @@ def main() -> int:
         attn_implementation="sdpa",
     )
     if args.adapter is not None:
+        # adapter=None 是未微调底座基线；同一脚本也能评测任意 epoch。
         model = PeftModel.from_pretrained(model, args.adapter, local_files_only=True)
     model.to("cuda").eval()
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -52,6 +58,7 @@ def main() -> int:
                 continue
             row: dict[str, Any] = json.loads(line)
             prompt = contract_prompt(str(row["signals"]), str(row["utterance"]))
+            # 只把输入信息交给模型，不把 expected 泄漏进 prompt。
             encoded = tokenizer.apply_chat_template(
                 [{"role": "user", "content": prompt}],
                 tokenize=True,
@@ -59,8 +66,8 @@ def main() -> int:
                 enable_thinking=False,
                 return_tensors="pt",
             )
-            # Transformers may return a tensor or a BatchEncoding depending on
-            # version and tokenizer settings; normalize both to input tensors.
+            # Transformers 可能返回 Tensor 或 BatchEncoding；统一抽取 input_ids，
+            # 以兼容本轮训练服务器上已验证的版本组合。
             if hasattr(encoded, "keys") and "input_ids" in encoded:
                 input_ids = encoded["input_ids"]
                 attention_mask = encoded.get("attention_mask")
@@ -81,6 +88,7 @@ def main() -> int:
                     attention_mask = attention_mask.unsqueeze(0)
                 attention_mask = attention_mask.to(input_ids.device)
             with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+                # 与训练保持一致的非采样解码，便于同一 gold 上比较各 checkpoint。
                 generated = model.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
@@ -94,6 +102,7 @@ def main() -> int:
                     eos_token_id=tokenizer.eos_token_id,
                 )
             text = tokenizer.decode(generated[0, input_ids.shape[1] :], skip_special_tokens=True)
+            # 保存原始模型输出；JSON 解析与契约评分留给独立评测脚本处理。
             output.write(json.dumps({"id": row["id"], "text": text}, ensure_ascii=False) + "\n")
             count += 1
             if count % 25 == 0:

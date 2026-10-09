@@ -14,6 +14,7 @@ from pathlib import Path
 
 
 def sha256(path: Path) -> str:
+    """流式计算权重摘要，避免把约 1 GB 的文件一次读入内存。"""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -37,6 +38,7 @@ def main() -> int:
     output = args.output_dir.resolve()
     base_weights = base / "model.safetensors"
     adapter_weights = adapter / "adapter_model.safetensors"
+    # 合并前要求底座、分词器与 adapter 配置齐全；不能只凭目录存在判定可用。
     for path in (base / "config.json", base_weights, base / "tokenizer.json",
                  adapter / "adapter_config.json", adapter_weights):
         if not path.is_file():
@@ -52,6 +54,7 @@ def main() -> int:
         parser.error("输入不是预期的 Qwen3 底座与 LoRA adapter")
 
     base_sha = sha256(base_weights)
+    # 固定底座哈希是为了避免把 LoRA 错合并到同名但不同版本的权重上。
     if args.expected_base_sha256 and base_sha.lower() != args.expected_base_sha256.lower():
         parser.error(f"底座 SHA-256 不匹配：实际 {base_sha}")
     adapter_sha = sha256(adapter_weights)
@@ -71,12 +74,14 @@ def main() -> int:
         local_files_only=True, trust_remote_code=True,
     )
     model = PeftModel.from_pretrained(model, adapter, local_files_only=True)
+    # safe_merge 会检查异常权重；卸载后产物可独立加载，不再依赖 LoRA 文件。
     model = model.merge_and_unload(safe_merge=True)
 
     output.mkdir(parents=True)
     model.save_pretrained(output, safe_serialization=True, max_shard_size="2GB")
     tokenizer.save_pretrained(output)
     if (base / "LICENSE").is_file():
+        # 如需单独分发衍生权重，保留底座随附的许可证文件。
         shutil.copy2(base / "LICENSE", output / "LICENSE")
 
     saved_weights = sorted(output.glob("*.safetensors"))
@@ -86,6 +91,7 @@ def main() -> int:
         raise RuntimeError("输出仍含 adapter_config.json，不是独立合并模型")
 
     manifest = {
+        # manifest 记录输入与输出权重、版本，便于证明 GGUF 来自哪次选模。
         "base_model": str(base),
         "base_model_sha256": base_sha,
         "adapter": str(adapter),

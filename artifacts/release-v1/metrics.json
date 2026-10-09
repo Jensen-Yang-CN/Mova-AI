@@ -1,0 +1,413 @@
+{
+  "data_note": "500 条为教师标签评测；150 条为 AI 复核压力题，均非独立人工金标准",
+  "description": "Mova-AI 端侧决策模型；非短信正文生成模型",
+  "formal500": {
+    "round1": {
+      "base": {
+        "complexity_mae": 0.4886,
+        "contract_valid": 434,
+        "contract_valid_rate": 0.868,
+        "failure_reasons": {
+          "槽位 meal 取值非法": 38,
+          "缺少必填槽位 ingredients": 1,
+          "缺少必填槽位 place_type": 26,
+          "缺少必填槽位 target_tone": 1
+        },
+        "intent_accuracy": 0.2788,
+        "need_cloud_accuracy": 0.4954,
+        "per_scene_intent_accuracy": {
+          "chat": 0.0,
+          "food": 0.3937,
+          "location": 0.1724,
+          "none": 0.9455,
+          "reading": 0.007
+        },
+        "scene_accuracy": 0.3733,
+        "slot_f1": 0.3738,
+        "slot_field_accuracy": 0.1689,
+        "slot_precision": 0.882,
+        "slot_recall": 0.2372,
+        "total": 500
+      },
+      "epoch-1": {
+        "complexity_mae": 0.0501,
+        "contract_valid": 500,
+        "contract_valid_rate": 1.0,
+        "failure_reasons": {},
+        "intent_accuracy": 0.966,
+        "need_cloud_accuracy": 0.898,
+        "per_scene_intent_accuracy": {
+          "chat": 1.0,
+          "food": 0.9898,
+          "location": 0.9815,
+          "none": 1.0,
+          "reading": 0.9014
+        },
+        "scene_accuracy": 0.998,
+        "slot_f1": 0.9497,
+        "slot_field_accuracy": 0.9282,
+        "slot_precision": 0.9508,
+        "slot_recall": 0.9486,
+        "total": 500
+      },
+      "epoch-2": {
+        "complexity_mae": 0.0387,
+        "contract_valid": 500,
+        "contract_valid_rate": 1.0,
+        "failure_reasons": {},
+        "intent_accuracy": 0.974,
+        "need_cloud_accuracy": 0.932,
+        "per_scene_intent_accuracy": {
+          "chat": 1.0,
+          "food": 0.9898,
+          "location": 0.9815,
+          "none": 0.9153,
+          "reading": 0.9577
+        },
+        "scene_accuracy": 0.99,
+        "slot_f1": 0.9568,
+        "slot_field_accuracy": 0.9348,
+        "slot_precision": 0.9528,
+        "slot_recall": 0.9607,
+        "total": 500
+      },
+      "epoch-3": {
+        "complexity_mae": 0.0341,
+        "contract_valid": 500,
+        "contract_valid_rate": 1.0,
+        "failure_reasons": {},
+        "intent_accuracy": 0.97,
+        "need_cloud_accuracy": 0.932,
+        "per_scene_intent_accuracy": {
+          "chat": 1.0,
+          "food": 0.9898,
+          "location": 0.9815,
+          "none": 0.9831,
+          "reading": 0.9225
+        },
+        "scene_accuracy": 0.996,
+        "slot_f1": 0.9633,
+        "slot_field_accuracy": 0.9471,
+        "slot_precision": 0.9644,
+        "slot_recall": 0.9622,
+        "total": 500
+      }
+    },
+    "round2_epoch2": {
+      "complexity_mae": 0.0435,
+      "contract_valid": 500,
+      "contract_valid_rate": 1.0,
+      "failure_reasons": {},
+      "intent_accuracy": 0.956,
+      "need_cloud_accuracy": 0.928,
+      "per_scene_intent_accuracy": {
+        "chat": 1.0,
+        "food": 0.9898,
+        "location": 0.9815,
+        "none": 1.0,
+        "reading": 0.8662
+      },
+      "scene_accuracy": 0.998,
+      "slot_f1": 0.9626,
+      "slot_field_accuracy": 0.9452,
+      "slot_precision": 0.9637,
+      "slot_recall": 0.9615,
+      "total": 500
+    }
+  },
+  "provenance": {
+    "independent_gold": {
+      "exact_overlap": 0,
+      "families": {
+        "chat_relation": 30,
+        "device_command": 10,
+        "file_command": 10,
+        "food_boundary": 15,
+        "food_diet": 10,
+        "location_destination": 15,
+        "location_near_enum": 15,
+        "location_other": 20,
+        "new_context": 15,
+        "reading_boundary": 10
+      },
+      "gold_sha256": "b0d292fd189421d6e762b979540481ca5fb333d4ad585fe335682fa902324fa4",
+      "near_overlap_to_review": 0,
+      "need_cloud_labeled": 50,
+      "prior_gold_md5": "27a33ffbf5d2dd01d391533cb0443f3c",
+      "reviewer": "ai",
+      "signal_variants": 20,
+      "total": 150,
+      "train_md5": "d32b73adbc456212f42eaae2099d93ee"
+    },
+    "round2_data": {
+      "candidate_count": 204,
+      "excluded_count": 0,
+      "locked_gold_sha256": "b0d292fd189421d6e762b979540481ca5fb333d4ad585fe335682fa902324fa4",
+      "mixed_train_md5": "5d63234a67269710ed57830744a0fc8f",
+      "new_count": 204,
+      "new_families": {
+        "food_boundary": 32,
+        "food_diet": 36,
+        "food_price": 16,
+        "food_recipe": 12,
+        "location_destination": 27,
+        "location_live": 54,
+        "location_timer": 27
+      },
+      "new_labels": "ai_rule_draft; not teacher or human reviewed",
+      "new_train_md5": "fa1dc2d87670b2776a2cf24c19e20bbe",
+      "prior_gold_md5": "27a33ffbf5d2dd01d391533cb0443f3c",
+      "source_audit_findings": 2,
+      "source_train_md5": "d32b73adbc456212f42eaae2099d93ee",
+      "train_scene_intent": {
+        "chat/none": 4,
+        "chat/reply_suggest": 312,
+        "chat/rewrite": 115,
+        "chat/tone_adjust": 112,
+        "food/diet_advice": 521,
+        "food/ingredient_check": 910,
+        "food/recipe_lookup": 717,
+        "location/nearby_hint": 273,
+        "location/none": 26,
+        "location/timing_reminder": 298,
+        "none/none": 646,
+        "reading/difficulty_judge": 443,
+        "reading/key_points": 639,
+        "reading/summarize": 484
+      }
+    }
+  },
+  "run_config": {
+    "round1": {
+      "epochs": 3,
+      "free_gib_at_start": 55.63,
+      "gpu": "NVIDIA B200",
+      "gradient_accumulation_steps": 4,
+      "learning_rate": 0.0002,
+      "max_seq_length": 2048,
+      "memory_fraction": 0.17,
+      "per_device_batch_size": 8,
+      "seed": 42,
+      "total_steps": 516
+    },
+    "round2": {
+      "epochs": 3,
+      "free_gib_at_start": 55.42,
+      "gpu": "NVIDIA B200",
+      "gradient_accumulation_steps": 4,
+      "learning_rate": 0.0002,
+      "max_seq_length": 2048,
+      "memory_fraction": 0.17,
+      "per_device_batch_size": 8,
+      "seed": 42,
+      "total_steps": 537
+    }
+  },
+  "selected_checkpoint": "round1/epoch-3",
+  "stress150": {
+    "round1_epoch3": {
+      "contract_valid": 150,
+      "contract_valid_rate": 1.0,
+      "failed_ids": 40,
+      "families": {
+        "chat_relation": {
+          "correct": 26,
+          "passed": false,
+          "rate": 0.8667,
+          "target": 0.9,
+          "total": 30
+        },
+        "device_command": {
+          "correct": 10,
+          "passed": true,
+          "rate": 1.0,
+          "target": 0.95,
+          "total": 10
+        },
+        "file_command": {
+          "correct": 10,
+          "passed": true,
+          "rate": 1.0,
+          "target": 0.95,
+          "total": 10
+        },
+        "food_boundary": {
+          "correct": 11,
+          "passed": false,
+          "rate": 0.7333,
+          "target": 0.95,
+          "total": 15
+        },
+        "food_diet": {
+          "correct": 6,
+          "passed": false,
+          "rate": 0.6,
+          "target": 0.9,
+          "total": 10
+        },
+        "location_destination": {
+          "correct": 5,
+          "passed": false,
+          "rate": 0.3333,
+          "target": 0.95,
+          "total": 15
+        },
+        "location_near_enum": {
+          "correct": 6,
+          "passed": false,
+          "rate": 0.4,
+          "target": 0.9,
+          "total": 15
+        },
+        "location_other": {
+          "correct": 12,
+          "passed": false,
+          "rate": 0.6,
+          "target": 0.95,
+          "total": 20
+        },
+        "new_context": {
+          "correct": 14,
+          "passed": true,
+          "rate": 0.9333,
+          "target": 0.9,
+          "total": 15
+        },
+        "reading_boundary": {
+          "correct": 10,
+          "passed": true,
+          "rate": 1.0,
+          "target": 0.9,
+          "total": 10
+        }
+      },
+      "field_accuracy_all_rows": {
+        "intent": {
+          "correct": 139,
+          "rate": 0.9267,
+          "total": 150
+        },
+        "labeled_slots": {
+          "correct": 64,
+          "rate": 0.7711,
+          "total": 83
+        },
+        "need_cloud": {
+          "correct": 33,
+          "rate": 0.66,
+          "total": 50
+        },
+        "scene": {
+          "correct": 145,
+          "rate": 0.9667,
+          "total": 150
+        }
+      },
+      "gold_sha256": "b0d292fd189421d6e762b979540481ca5fb333d4ad585fe335682fa902324fa4",
+      "reviewer": "ai",
+      "total": 150
+    },
+    "round2_epoch2": {
+      "contract_valid": 150,
+      "contract_valid_rate": 1.0,
+      "failed_ids": 32,
+      "families": {
+        "chat_relation": {
+          "correct": 25,
+          "passed": false,
+          "rate": 0.8333,
+          "target": 0.9,
+          "total": 30
+        },
+        "device_command": {
+          "correct": 9,
+          "passed": false,
+          "rate": 0.9,
+          "target": 0.95,
+          "total": 10
+        },
+        "file_command": {
+          "correct": 10,
+          "passed": true,
+          "rate": 1.0,
+          "target": 0.95,
+          "total": 10
+        },
+        "food_boundary": {
+          "correct": 15,
+          "passed": true,
+          "rate": 1.0,
+          "target": 0.95,
+          "total": 15
+        },
+        "food_diet": {
+          "correct": 5,
+          "passed": false,
+          "rate": 0.5,
+          "target": 0.9,
+          "total": 10
+        },
+        "location_destination": {
+          "correct": 11,
+          "passed": false,
+          "rate": 0.7333,
+          "target": 0.95,
+          "total": 15
+        },
+        "location_near_enum": {
+          "correct": 11,
+          "passed": false,
+          "rate": 0.7333,
+          "target": 0.9,
+          "total": 15
+        },
+        "location_other": {
+          "correct": 10,
+          "passed": false,
+          "rate": 0.5,
+          "target": 0.95,
+          "total": 20
+        },
+        "new_context": {
+          "correct": 14,
+          "passed": true,
+          "rate": 0.9333,
+          "target": 0.9,
+          "total": 15
+        },
+        "reading_boundary": {
+          "correct": 8,
+          "passed": false,
+          "rate": 0.8,
+          "target": 0.9,
+          "total": 10
+        }
+      },
+      "field_accuracy_all_rows": {
+        "intent": {
+          "correct": 138,
+          "rate": 0.92,
+          "total": 150
+        },
+        "labeled_slots": {
+          "correct": 74,
+          "rate": 0.8916,
+          "total": 83
+        },
+        "need_cloud": {
+          "correct": 30,
+          "rate": 0.6,
+          "total": 50
+        },
+        "scene": {
+          "correct": 147,
+          "rate": 0.98,
+          "total": 150
+        }
+      },
+      "gold_sha256": "b0d292fd189421d6e762b979540481ca5fb333d4ad585fe335682fa902324fa4",
+      "reviewer": "ai",
+      "total": 150
+    }
+  }
+}

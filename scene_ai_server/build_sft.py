@@ -1,4 +1,9 @@
-"""Build chat-format SFT examples from the finalized distillation JSONL."""
+"""把最终教师标注 JSONL 转为 Qwen3 对话式 SFT 数据。
+
+输入是 ``{id, signals, utterance, target}``；输出只包含一轮 user/assistant
+对话。user 使用线上推理同一份能力契约提示词，assistant 是教师给出的
+结构化 JSON。正式批次先校验 MD5，避免误把仓库中的 60 条 pilot 用于训练。
+"""
 from __future__ import annotations
 
 import argparse
@@ -26,6 +31,7 @@ def md5(path: Path) -> str:
 
 
 def build(source: Path, output: Path, limit: int | None, expected_md5: str) -> int:
+    # 先核对源数据身份，再创建输出；批次拿错时不留下貌似可训练的文件。
     actual_md5 = md5(source)
     if expected_md5 and actual_md5 != expected_md5:
         raise SystemExit(
@@ -48,12 +54,14 @@ def build(source: Path, output: Path, limit: int | None, expected_md5: str) -> i
             seen.add(sample_id)
 
             target = row.get("target")
+            # 教师标签要先通过场景、意图、槽位等契约检查；训练阶段不替教师纠错。
             errors = validate(target)
             if errors:
                 raise ValueError(f"{sample_id} 教师标签不符合契约：{errors}")
 
             user = contract_prompt(str(row["signals"]), str(row["utterance"]))
             assistant = json.dumps(target, ensure_ascii=False)
+            # 保留 id/scene/intent 便于追踪；训练脚本只消费 messages。
             example = {
                 "id": sample_id,
                 "scene": target["scene"],
