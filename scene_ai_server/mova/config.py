@@ -93,7 +93,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
     )
     base_url = os.environ.get("MOVA_BASE_URL", "").strip() or defaults["base_url"]
 
-    if not api_key:
+    # 局域网 vLLM 可显式选择无鉴权模式；商业服务仍要求有效密钥。
+    if not api_key and provider != "vllm":
         raise ConfigError(
             f"未检测到 {provider} 的 API Key。\n"
             f"  请设置环境变量 {defaults['key_env']}（或统一的 MOVA_API_KEY），\n"

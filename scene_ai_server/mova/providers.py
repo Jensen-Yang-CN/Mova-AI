@@ -88,6 +88,9 @@ class OpenAICompatProvider:
             "messages": messages,
             "temperature": temperature,
         }
+        if self.settings.provider == "vllm":
+            # 与教师数据生成的 Qwen 配置保持一致，回复正文不输出思考标签。
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
         # 视觉请求要用视觉模型
         if any(isinstance(m.get("content"), list) for m in messages):
             payload["model"] = self.settings.vision_model
@@ -101,10 +104,9 @@ class OpenAICompatProvider:
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         url = self.settings.base_url.rstrip("/") + path
-        headers = {
-            "Authorization": f"Bearer {self.settings.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Content-Type": "application/json"}
+        if self.settings.api_key:
+            headers["Authorization"] = f"Bearer {self.settings.api_key}"
         last_error: Exception | None = None
 
         for attempt in range(self.settings.max_retries + 1):

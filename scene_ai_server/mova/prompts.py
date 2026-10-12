@@ -100,7 +100,8 @@ def reading_pdf_prompt(full_text: str, page_count: int) -> str:
 }}"""
 
 
-def chat_reply_prompt(context: str, style: str) -> str:
+def chat_reply_prompt(context: str, style: str, goal: str = "") -> str:
+    goal_line = f"- 回复目标：{goal}" if goal else "- 回复目标：根据语境自然回复"
     return f"""你是一个中文聊天助手，根据对方的话帮我生成合适的回复。
 
 对方说的话：
@@ -108,8 +109,11 @@ def chat_reply_prompt(context: str, style: str) -> str:
 
 要求：
 - 回复风格：{style}
+{goal_line}
+- 不要补造姓名、称谓、具体日期或承诺；用户未给称谓时直接表达内容
+- 若目标是拒绝，不要使用「欠着」「改天再约」「下次一定帮」等新增补偿或再约承诺；可以表达歉意和祝愿
 - 给出 1 条推荐回复、2 条备选回复
-- 简要说明为什么这样回
+- 简要说明为什么这样回，只说明沟通效果，不提提示词、格式约束或遵循规则
 
 只输出 JSON：
 {{

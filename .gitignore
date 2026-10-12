@@ -50,6 +50,9 @@ scene_ai_server/data/cache/
 scene_ai_server/data/model_output/
 # 训练、转换与推理的原始日志可能包含服务器绝对路径，只在本地留存。
 scene_ai_server/data/train_logs/
+# Android JNI 构建时引用的上游 llama.cpp 源码由独立版本锁定，不把第三方仓库嵌入本仓库。
+SceneAi_App/third_party/llama.cpp/
+SceneAi_App/third_party/llama.cpp-retry/
 # 人工复核表、锁定的独立 gold 与模型预测仅保存在本地/训练服务器。
 scene_ai_server/data/independent_eval/
 # 第二轮生成的正式混合训练源包含服务器数据，不提交公开仓库。

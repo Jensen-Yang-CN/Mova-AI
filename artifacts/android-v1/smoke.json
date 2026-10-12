@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-12",
+  "device": "OPPO Find X7 Ultra",
+  "android": "16",
+  "abi": "arm64-v8a",
+  "model": "Qwen3-0.6B round1 epoch-3 Q4_K_M",
+  "model_bytes": 396704544,
+  "model_sha256": "0c5f1a05e36f49556a9457a51523e87a1dc7aec9f7f1ad00e1c027b0ad051d92",
+  "native": {
+    "build_type": "RelWithDebInfo",
+    "cpu_kernel": "armv8.2-a+dotprod",
+    "threads": 4,
+    "context_tokens": 2048,
+    "prompt_tokens_in_case": 1090
+  },
+  "local_junit": {
+    "tests": 1,
+    "failures": 0,
+    "total_seconds_including_initialization": 11.231,
+    "scene": "chat",
+    "intent": "reply_suggest"
+  },
+  "app_ui_case": {
+    "case": "synthetic_chat_move_decline",
+    "success": true,
+    "total_ms": 10919,
+    "edge_decision_ms": 8839,
+    "server_ms": 2047,
+    "body_executor": "cloud",
+    "copy_confirmation_seen": true,
+    "history_entry_seen": true
+  },
+  "server_examples": {
+    "chat_reply_status": 200,
+    "reading_text_status": 200,
+    "food_sample_image_status": 200
+  },
+  "visual_checks": {
+    "light_home": true,
+    "dark_home": true,
+    "dark_chat_result": true,
+    "light_chat_result": true
+  },
+  "share_prefill_without_auto_generation": true,
+  "decline_reply_without_new_compensation_promise": true,
+  "scope": "单条合成场景和功能冒烟，不是延迟平均值、真实用户实验或量化后全量精度评测。公开记录不含设备序列号、API key、服务地址或原始手机日志。"
+}

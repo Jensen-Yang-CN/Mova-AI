@@ -4,7 +4,7 @@
   ① 拆出 mova/ 子包：配置、厂商适配、提示词各自独立，app.py 只负责路由
   ② 新增 /health 与 /capabilities：App 的首启向导与首页状态卡依赖它们
   ③ 每个响应都带 meta（执行方式 / 模型 / 耗时 / 阶段拆解 / 路由原因）——
-     这是 App 技术面板的唯一数据来源
+     云端阶段由此记录，App 另记录本机 GGUF 阶段
   ④ 上传做**魔数嗅探**而不是听信 Content-Type，并限制体积
   ⑤ 关键路径全部改为结构化日志，不再 print 完整响应体
   ⑥ 大模型调用失败会重试，并映射成合适的 HTTP 状态码
@@ -47,15 +47,15 @@ except ConfigError as exc:
 
 PROVIDER = OpenAICompatProvider(SETTINGS)
 
-#: 端侧执行器尚未接入时，所有请求的路由原因。与客户端 Router 的文案保持一致。
-CLOUD_ONLY_REASON = "端侧执行器未接入，本次直连云端"
+# 服务端只知道本次正文由云端生成；手机是否已做本地判断由客户端记录。
+CLOUD_ONLY_REASON = "本接口由云端生成；客户端端侧判断见本机阶段记录"
 
 app = FastAPI(
     title="Mova-AI 云端服务",
     version=VERSION,
     description=(
         "移动端场景助手的云侧能力层。"
-        "重推理与长生成在此完成，轻判断与结构化抽取由端侧小模型承担（规划中）。"
+        "正文生成在此完成；Android 聊天可先做本机 GGUF 判断，端侧状态由客户端记录。"
     ),
 )
 
@@ -79,6 +79,7 @@ class ReadingTextRequest(BaseModel):
 class ChatReplyRequest(BaseModel):
     context: str = Field(min_length=1, description="对方说的话")
     style: str = "自然"
+    goal: str = ""
 
 
 class ChatRewriteRequest(BaseModel):
@@ -377,7 +378,7 @@ async def reading_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
 @app.post("/chat/reply", summary="生成一条回复建议")
 async def chat_reply(req: ChatReplyRequest) -> dict[str, Any]:
     return await _chat(
-        prompts.chat_reply_prompt(req.context, req.style), "chat", req.style
+        prompts.chat_reply_prompt(req.context, req.style, req.goal), "chat", req.style
     )
 
 

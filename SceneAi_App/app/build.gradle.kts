@@ -9,6 +9,9 @@ plugins {
 
 android {
     namespace = "com.mova.sceneai"
+    // 与服务器上验证过的 GGUF 转换工具链分开锁定 Android native 构建版本。
+    ndkVersion = "27.0.12077973"
+    buildToolsVersion = "36.0.0"
     compileSdk {
         version = release(36)
     }
@@ -22,6 +25,14 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        // 同时保留 arm64 真机和 x86_64 模拟器；不因新增 native 库让现有演示无法安装。
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_shared", "-DGGML_NATIVE=OFF")
+            }
+        }
 
         // 首次启动写入设置项的默认服务地址
         // 模拟器用 10.0.2.2；真机请改成电脑的局域网 IP（App 内也可随时修改）
@@ -67,6 +78,13 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     packaging {

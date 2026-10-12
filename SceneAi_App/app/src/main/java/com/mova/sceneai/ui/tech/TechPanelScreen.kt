@@ -11,11 +11,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +33,7 @@ import com.mova.sceneai.MovaApp
 import com.mova.sceneai.core.Fmt
 import com.mova.sceneai.data.model.ExecutorKind
 import com.mova.sceneai.data.model.RequestTrace
+import com.mova.sceneai.data.edge.EdgeObservation
 import com.mova.sceneai.data.repo.EdgeRuntimeState
 import com.mova.sceneai.data.repo.SessionStats
 import com.mova.sceneai.ui.components.EmptyState
@@ -39,6 +46,7 @@ import com.mova.sceneai.ui.components.MovaScreen
 import com.mova.sceneai.ui.components.OutlinedActionButton
 import com.mova.sceneai.ui.components.SectionHeader
 import com.mova.sceneai.ui.theme.LocalMovaSemanticColors
+import kotlinx.coroutines.launch
 
 /**
  * 技术面板。
@@ -59,11 +67,11 @@ fun TechPanelScreen(onOpenSettings: () -> Unit) {
     val stats = remember(traces) { computeStats(traces) }
     val latest = traces.firstOrNull { it.success }
 
-    MovaScreen(title = "技术面板", subtitle = "AI 刚才做了什么决定，这里如实记录") {
+    MovaScreen(title = "运行证据", subtitle = "每一次判断，都有迹可循") {
 
         InfoBanner(
-            text = "这一页不面向日常使用，而是把端云路由、耗时与模型状态摊开给你看 —— " +
-                "包括端侧模型尚未接入这件事。",
+            text = "这里记录真实的模型状态和端云路由。端侧判断和云端正文生成分别计时；" +
+                "只有用户结果由端侧完成时才计入“端侧完成”。",
         )
 
         MovaCard {
@@ -80,6 +88,8 @@ fun TechPanelScreen(onOpenSettings: () -> Unit) {
         }
 
         EdgeModelCard(edge = edge, onOpenSettings = onOpenSettings)
+
+        EdgeTryout(edge = edge, inspect = container.repository::inspectEdge)
 
         if (latest != null && latest.stages.isNotEmpty()) {
             MovaCard {
@@ -136,6 +146,65 @@ fun TechPanelScreen(onOpenSettings: () -> Unit) {
     }
 }
 
+/** 本机直接试运行分类器，便于在没有云端服务时核验 GGUF 是否真正参与推理。 */
+@Composable
+private fun EdgeTryout(
+    edge: EdgeRuntimeState,
+    inspect: suspend (String) -> EdgeObservation,
+) {
+    var input by remember { mutableStateOf("") }
+    var output by remember { mutableStateOf<EdgeObservation?>(null) }
+    var running by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    MovaCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("端侧模型试运行", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "只做场景、意图和槽位判断；不生成短信，也不请求云端。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it; output = null },
+                label = { Text("输入一句话") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                maxLines = 4,
+            )
+            OutlinedButton(
+                enabled = edge.ready && !running && input.isNotBlank() && input.length <= 1000,
+                onClick = {
+                    val utterance = input.trim()
+                    running = true
+                    scope.launch {
+                        try {
+                            output = inspect(utterance)
+                        } finally {
+                            running = false
+                        }
+                    }
+                },
+            ) {
+                if (running) CircularProgressIndicator(modifier = Modifier.width(16.dp).height(16.dp))
+                else Text("在本机判断")
+            }
+            if (input.length > 1000) Text("请输入不超过 1000 字的短文本")
+            output?.let { result ->
+                if (result.decision == null) {
+                    Text(result.failure ?: "端侧输出未通过契约校验", color = MaterialTheme.colorScheme.error)
+                } else {
+                    val decision = result.decision
+                    KeyValueRow("场景 / 意图", "${decision.scene} / ${decision.intent}")
+                    KeyValueRow("是否建议上云", if (decision.needCloud) "是" else "否")
+                    KeyValueRow("耗时", Fmt.duration(result.latencyMs))
+                    Text("槽位：${decision.slots}", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun EdgeModelCard(edge: EdgeRuntimeState, onOpenSettings: () -> Unit) {
     val semantic = LocalMovaSemanticColors.current
@@ -158,7 +227,7 @@ private fun EdgeModelCard(edge: EdgeRuntimeState, onOpenSettings: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 InfoBanner(
                     text = edge.unavailableReason
-                        ?: "端侧小模型尚未接入；接入后离线也能使用部分能力。",
+                        ?: "端侧小模型尚未接入；接入后可在本机判断场景与意图。",
                     container = semantic.warningContainer,
                     contentColor = semantic.onWarningContainer,
                 )
@@ -237,6 +306,7 @@ private fun computeStats(traces: List<RequestTrace>): SessionStats = SessionStat
 
 /** 阶段键 → 中文标签。服务端返回英文 key，展示层统一翻译。 */
 private fun stageLabel(key: String): String = when (key) {
+    "edge_decision" -> "端侧判断"
     "recognize" -> "食材识别"
     "generate" -> "动作生成"
     "preprocess" -> "预处理"

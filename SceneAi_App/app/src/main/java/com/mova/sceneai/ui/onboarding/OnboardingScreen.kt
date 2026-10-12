@@ -177,19 +177,19 @@ fun OnboardingScreen(onFinished: () -> Unit) {
 private fun WelcomePage() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(16.dp))
-        Text("✨", fontSize = 44.sp)
+        com.mova.sceneai.ui.components.MovaOrb(Modifier.size(160.dp).align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(16.dp))
-        Text("不用开口，它自己知道", style = MaterialTheme.typography.headlineMedium)
+        Text("小事有人接住，生活慢慢上手", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(10.dp))
         Text(
-            "Mova-AI 感知你正在做什么，在最合适的时刻主动帮忙 —— 不用先想好怎么问，也不用先找到 App。",
+            "离家后的日常，也值得被认真照应。带来眼前的小求助，先明确想法，再找到合适的表达与行动。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(24.dp))
-        ValueCard("🍜", "在厨房举起手机", "识别食材，直接告诉你能做哪道菜、怎么做")
-        ValueCard("📄", "看到一篇长文章", "自动给出摘要、要点和一个值得继续追问的问题")
-        ValueCard("💬", "不知道怎么回这条消息", "给推荐话术、备选方案，还说明为什么这样回")
+        ValueCard("03", "给自己做一顿饭", "识别食材，直接告诉你能做哪道菜、怎么做")
+        ValueCard("02", "读懂眼前这一页", "提交文字后，抓住摘要与要点")
+        ValueCard("01", "把难开口的话说好", "给推荐话术、备选方案，还说明为什么这样回")
         Spacer(Modifier.height(8.dp))
         Text(
             "复杂推理交给云端大模型，快速判断与离线可用的部分放在手机本地（端侧能力接入后自动启用）。",
@@ -241,7 +241,7 @@ private fun PermissionPage(
         Spacer(Modifier.height(20.dp))
         PermissionRow("📷", "相机", "拍食材、拍文章，用来识别内容", cameraGranted, onRequestCamera)
         Spacer(Modifier.height(10.dp))
-        PermissionRow("🔔", "通知", "场景触发时提醒你，可随时关闭", notifGranted, onRequestNotif)
+        PermissionRow("🔔", "通知", "提醒功能需要时使用，可随时关闭", notifGranted, onRequestNotif)
     }
 }
 

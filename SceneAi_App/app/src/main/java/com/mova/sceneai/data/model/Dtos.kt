@@ -105,7 +105,12 @@ data class CapabilitiesDto(
 data class ReadingTextRequest(val content: String)
 
 @Serializable
-data class ChatReplyRequest(val context: String, val style: String = "自然")
+data class ChatReplyRequest(
+    val context: String,
+    val style: String = "自然",
+    /** 用户显式目标优先；未指定时可采用端侧抽取的 goal。 */
+    val goal: String = "",
+)
 
 @Serializable
 data class ChatRewriteRequest(val text: String, val style: String = "礼貌")

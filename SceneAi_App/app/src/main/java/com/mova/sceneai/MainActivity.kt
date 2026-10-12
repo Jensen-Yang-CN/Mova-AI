@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
     /**
      * 取出分享携带的文字放进收件箱。
      *
-     * 这里只负责"接住"，不负责"处理"——导航到聊天页、触发生成这些事，
+     * 这里只负责接收分享；导航到聊天页与预填输入由页面处理，生成需用户确认，
      * 由 Compose 侧观察 SharedInbox 完成。Activity 管入口、Compose 管流程。
      */
     private fun receiveSharedText(intent: Intent?) {

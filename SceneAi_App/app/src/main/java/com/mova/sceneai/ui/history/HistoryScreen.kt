@@ -48,7 +48,7 @@ fun HistoryScreen(onOpenEntry: (String) -> Unit, onOpenFood: () -> Unit) {
         if (filter == SceneGroup.ALL) entries else entries.filter { it.scene.group == filter }
     }
 
-    MovaScreen(title = "记录", subtitle = "做过的每一次，都能翻回来") {
+    MovaScreen(title = "回看", subtitle = "做过的每一次，都能翻回来") {
         MovaChipRow(
             options = SceneGroup.filters.map { it.label },
             selected = filter.label,

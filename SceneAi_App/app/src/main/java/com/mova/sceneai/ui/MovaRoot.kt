@@ -7,12 +7,17 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -93,7 +98,13 @@ fun MovaRoot() {
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 bottomBar = {
                     if (currentTab != null) {
-                        NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                        Box(Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        NavigationBar(
+                            modifier = Modifier.clip(RoundedCornerShape(26.dp)).border(.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = .15f), RoundedCornerShape(26.dp)),
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            tonalElevation = 0.dp,
+                            windowInsets = WindowInsets(0, 0, 0, 0),
+                        ) {
                             MainTab.entries.forEach { tab ->
                                 NavigationBarItem(
                                     selected = tab == currentTab,
@@ -108,8 +119,10 @@ fun MovaRoot() {
                                     },
                                     icon = { Icon(tab.icon, contentDescription = tab.label) },
                                     label = { Text(tab.label) },
+                                    colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer),
                                 )
                             }
+                        }
                         }
                     }
                 },
@@ -133,7 +146,7 @@ private fun MovaNavHost(
     onboardingDone: Boolean,
 ) {
     // 从别的 App 分享文字进来时，直接跳到聊天页。
-    // 聊天页的 ViewModel 会自己从收件箱取走内容、填入输入框并触发生成。
+    // 聊天页从收件箱取走内容并预填输入框；用户确认后再生成，避免自动上云。
     //
     // 两个刻意的约束：
     //   ① 首启向导没走完就不跳转 —— 否则用户会被直接扔进聊天页，错过权限与连接配置
@@ -232,7 +245,7 @@ private fun SplashScreen() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("✨", style = MaterialTheme.typography.displaySmall)
             Spacer(Modifier.height(12.dp))
-            Text("Mova-AI", style = MaterialTheme.typography.titleLarge)
+            Text("Mova·照应", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(2.dp))
             Text(
                 stringResource(R.string.app_name_desc),

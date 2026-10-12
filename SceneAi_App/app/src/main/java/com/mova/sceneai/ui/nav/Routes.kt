@@ -33,9 +33,9 @@ enum class MainTab(
     val label: String,
     val icon: ImageVector,
 ) {
-    HOME(Routes.HOME, "首页", Icons.Filled.Home),
-    HISTORY(Routes.HISTORY, "记录", Icons.Filled.History),
-    TECH(Routes.TECH, "技术", Icons.Filled.Insights),
+    HOME(Routes.HOME, "此刻", Icons.Filled.Home),
+    HISTORY(Routes.HISTORY, "回看", Icons.Filled.History),
+    TECH(Routes.TECH, "运行", Icons.Filled.Insights),
     SETTINGS(Routes.SETTINGS, "设置", Icons.Filled.Settings);
 
     companion object {

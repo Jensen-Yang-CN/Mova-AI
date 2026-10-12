@@ -76,16 +76,16 @@ fun MovaCard(
     contentPadding: Int = 16,
     content: @Composable () -> Unit,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(26.dp)
     val colors = CardDefaults.cardColors(containerColor = containerColor)
     val elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
 
     if (onClick == null) {
-        Card(modifier.fillMaxWidth(), shape, colors, elevation) {
+        Card(modifier.fillMaxWidth().border(.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = .16f), shape), shape, colors, elevation) {
             Box(Modifier.padding(contentPadding.dp)) { content() }
         }
     } else {
-        Card(onClick, modifier.fillMaxWidth(), shape = shape, colors = colors, elevation = elevation) {
+        Card(onClick, modifier.fillMaxWidth().border(.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = .16f), shape), shape = shape, colors = colors, elevation = elevation) {
             Box(Modifier.padding(contentPadding.dp)) { content() }
         }
     }
@@ -519,7 +519,7 @@ fun OutlinedActionButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
-    OutlinedButton(onClick = onClick, modifier = modifier) {
+    OutlinedButton(onClick = onClick, modifier = modifier.height(50.dp), shape = RoundedCornerShape(17.dp)) {
         if (icon != null) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
@@ -536,7 +536,7 @@ fun SolidActionButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    Button(onClick = onClick, modifier = modifier, enabled = enabled) {
+    Button(onClick = onClick, modifier = modifier.height(50.dp), enabled = enabled, shape = RoundedCornerShape(17.dp)) {
         if (icon != null) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))

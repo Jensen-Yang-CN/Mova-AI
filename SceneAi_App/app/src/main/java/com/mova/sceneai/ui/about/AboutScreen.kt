@@ -1,119 +1,47 @@
 package com.mova.sceneai.ui.about
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mova.sceneai.BuildConfig
-import com.mova.sceneai.R
-import com.mova.sceneai.ui.components.BulletList
-import com.mova.sceneai.ui.components.Divider
-import com.mova.sceneai.ui.components.InfoBanner
-import com.mova.sceneai.ui.components.KeyValueRow
-import com.mova.sceneai.ui.components.MovaCard
-import com.mova.sceneai.ui.components.MovaScreen
-import com.mova.sceneai.ui.components.SectionHeader
+import com.mova.sceneai.MovaApp
+import com.mova.sceneai.ui.components.*
 
-/**
- * 关于页。
- *
- * 刻意写清楚"端侧部分尚未接入"，而不是含糊其辞 ——
- * 一个诚实的项目说明比一个吹嘘的项目说明更经得起追问。
- */
+/** 产品动机与实际完成边界放在同一页，避免叙事与运行状态脱节。 */
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
-    MovaScreen(title = "关于 Mova-AI", onBack = onBack) {
-
+    val edge by MovaApp.instance.container.repository.edgeState.collectAsStateWithLifecycle()
+    MovaScreen(title = "关于照应", subtitle = "小事有人接住，生活慢慢上手", onBack = onBack) {
+        StoryIntro("MOVA", "离家之后，小事也有重量", "一条难回复的消息，一页没读完的通知，一顿不知道怎样做的饭。我们希望先接住眼前的小求助。")
+        SectionHeader("一个轻松的起点")
         MovaCard {
-            Column {
-                Text("Mova-AI", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    stringResource(R.string.app_name_desc),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    stringResource(R.string.app_slogan),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Text("面向离家求学、实习与独立生活的青年，让 AI 求助从具体场景开始。先明确自己的目标，再选择表达与行动。建议提供参考，决定权始终属于你。", style = MaterialTheme.typography.bodyMedium)
+        }
+        SectionHeader("手机理解，云端表达")
+        MovaCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                BulletList(listOf("本机小模型识别场景、意图和槽位，输出经过结构化校验。", "回复正文与复杂生成由云端模型完成，用户主动提交的内容会发送至所配置的服务。", "只处理主动输入或分享的内容；不自动读取第三方聊天。", "回复经用户确认后复制，App 不自动代为发送。"))
             }
         }
-
-        SectionHeader("它想解决的问题")
-        MovaCard {
-            Column {
-                Text(
-                    "手机里的 AI 助手大多是「你问它才答」：先打开 App、先想好怎么问、再等它回。" +
-                        "Mova-AI 想反过来 —— 让 AI 自己判断该不该出现。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-        }
-
-        SectionHeader("端云是怎么分工的")
-        MovaCard {
-            Column {
-                Text(
-                    "判断用最便宜的方式完成，不够再升级。这条规则同时管两层：",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                BulletList(
-                    listOf(
-                        "视觉层：端侧轻量分类器先判断场景，命中且需要细看才上云端多模态模型",
-                        "语言层：端侧小模型先做意图、难度与结构化抽取，置信度不足才升级云端大模型",
-                        "结构性兜底：端侧输出的 JSON 与槽位校验不通过时，直接升级，不重试端侧",
-                    )
-                )
-            }
-        }
-
-        SectionHeader("当前实现状态")
+        SectionHeader("可以核对的完成状态")
         MovaCard {
             Column {
                 KeyValueRow("版本", BuildConfig.VERSION_NAME)
-                KeyValueRow("构建类型", if (BuildConfig.DEBUG) "debug" else "release")
-                KeyValueRow("云端能力", "已接入")
-                KeyValueRow("端侧模型", "尚未接入")
-                Divider()
-                Spacer(Modifier.height(10.dp))
-                InfoBanner(
-                    text = "端侧小模型（蒸馏 + 量化后的 Qwen3 级别模型）尚未部署到 App 内。" +
-                        "技术面板会如实显示这一状态；接入后无需改动界面，统计会自动开始区分端侧与云端。",
-                )
+                KeyValueRow("本机模型", edge.statusLabel)
+                KeyValueRow("模型体积", "约 397 MB · Q4_K_M")
+                KeyValueRow("主动位置触发", "后续规划")
+                Spacer(Modifier.height(12.dp))
+                Text("训练、评测、量化与 Android 接入过程可在项目仓库核对。离线分类可单独试运行，回复正文仍需要可用的模型服务。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
-        SectionHeader("技术要点")
+        SectionHeader("作品与开源来源")
         MovaCard {
-            Column {
-                BulletList(
-                    listOf(
-                        "端云路由写成代价敏感决策：用端侧省下的延迟，折算可接受的精度差",
-                        "置信度经过校准后才用于决策，避免小模型过度自信导致误判",
-                        "模型蒸馏分 Response / Logit / Feature 三层，端侧只学场景理解类能力",
-                        "量化采用分层敏感性分析 + 比特分配求解，而非整模型一刀切",
-                    )
-                )
-            }
+            Text("项目名 Mova-AI；产品名 Mova·照应。模型基于 Qwen3-0.6B 微调，推理使用 llama.cpp，客户端使用 Kotlin / Jetpack Compose，服务使用 FastAPI。品牌光球由 Compose Canvas 绘制。具体依赖、模型来源和 AI 辅助环节见项目说明。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "详细设计见仓库 docs/ 目录下的三份文档。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }

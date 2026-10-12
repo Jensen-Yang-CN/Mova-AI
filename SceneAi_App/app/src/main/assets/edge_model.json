@@ -1,0 +1,7 @@
+{
+  "file": "qwen3-0.6b-epoch3-Q4_K_M.gguf",
+  "bytes": 396704544,
+  "sha256": "0c5f1a05e36f49556a9457a51523e87a1dc7aec9f7f1ad00e1c027b0ad051d92",
+  "model_name": "Mova-AI Qwen3-0.6B / round1 epoch-3",
+  "quantization": "Q4_K_M"
+}

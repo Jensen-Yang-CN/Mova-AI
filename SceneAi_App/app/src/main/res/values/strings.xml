@@ -6,10 +6,10 @@
                                反而更难认。
         全名 app_name_full  —— 关于页、启动页，以及 README / 文档里的正式名称。
     -->
-    <string name="app_name">Mova-AI</string>
-    <string name="app_name_full">Mova-AI · 场景触发式移动 AI 生活助手</string>
-    <string name="app_name_desc">场景触发式移动 AI 生活助手</string>
-    <string name="app_slogan">不是等你开口，而是在你需要的那一刻，刚好出现。</string>
+    <string name="app_name">Mova·照应</string>
+    <string name="app_name_full">Mova·照应——面向离家青年的端云协同生活助手</string>
+    <string name="app_name_desc">让日常的小求助，有一个轻松的起点</string>
+    <string name="app_slogan">小事有人接住，生活慢慢上手。</string>
 
     <!-- 通知（场景触发链路） -->
     <string name="channel_scene_trigger_name">场景主动提醒</string>

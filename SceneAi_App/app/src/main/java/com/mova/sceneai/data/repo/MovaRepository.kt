@@ -1,10 +1,13 @@
 package com.mova.sceneai.data.repo
 
 import android.content.Context
+import android.net.Uri
 import com.mova.sceneai.core.Fmt
 import com.mova.sceneai.core.MovaSettings
 import com.mova.sceneai.core.SettingsRepository
 import com.mova.sceneai.data.local.LocalStore
+import com.mova.sceneai.data.edge.EdgeModelManager
+import com.mova.sceneai.data.edge.EdgeObservation
 import com.mova.sceneai.data.model.CapabilitiesDto
 import com.mova.sceneai.data.model.ChatContextRequest
 import com.mova.sceneai.data.model.ChatDto
@@ -46,10 +49,15 @@ class MovaRepository(
     private val settingsRepo: SettingsRepository,
     private val store: LocalStore,
     private val json: Json,
+    private val edgeManager: EdgeModelManager,
 ) {
 
-    private val _edgeState = MutableStateFlow(EdgeRuntimeState())
-    val edgeState: StateFlow<EdgeRuntimeState> = _edgeState.asStateFlow()
+    /** 状态来自本机 GGUF 的校验和 native 加载，不再借用服务端 /health。 */
+    val edgeState: StateFlow<EdgeRuntimeState> = edgeManager.state
+    private val _chatEdgeObservation = MutableStateFlow<EdgeObservation?>(null)
+    /** 当前一次聊天请求的实际本地判断，供页面在云端生成期间展示。 */
+    val chatEdgeObservation = _chatEdgeObservation.asStateFlow()
+    fun clearChatDecision() { _chatEdgeObservation.value = null }
 
     private val _traces = MutableStateFlow<List<RequestTrace>>(emptyList())
     val traces: StateFlow<List<RequestTrace>> = _traces.asStateFlow()
@@ -58,6 +66,11 @@ class MovaRepository(
 
     suspend fun loadLocalData() = store.load()
 
+    suspend fun installEdgeModel(uri: Uri) = edgeManager.installFromUri(uri)
+
+    /** 技术面板的离线验收入口：只返回结构化判断，不调用云端。 */
+    suspend fun inspectEdge(text: String): EdgeObservation = edgeManager.observe(text)
+
     // ---------------------------------------------------------------
     // 连通性 / 能力清单
     // ---------------------------------------------------------------
@@ -65,15 +78,6 @@ class MovaRepository(
     suspend fun health(): HealthDto {
         val s = settingsRepo.current()
         return call(s, timeoutMs = 15_000) { api.health(s.endpoint("health")) }
-            .also { dto ->
-                _edgeState.value = EdgeRuntimeState(
-                    deployed = dto.edge?.deployed ?: false,
-                    loaded = dto.edge?.deployed ?: false,
-                    name = dto.edge?.name,
-                    sizeMb = dto.edge?.sizeMb,
-                    quantization = dto.edge?.quantization,
-                )
-            }
     }
 
     suspend fun capabilities(): CapabilitiesDto {
@@ -89,7 +93,7 @@ class MovaRepository(
         val s = settingsRepo.current()
         val decision = Router.decide(
             scene = Scene.FOOD,
-            edgeReady = _edgeState.value.ready,
+            edgeReady = edgeState.value.ready,
             edgePreferred = s.preferEdge,
         )
         return tracked(
@@ -152,17 +156,40 @@ class MovaRepository(
     // 聊天
     // ---------------------------------------------------------------
 
-    suspend fun chatReply(context: String, style: String): ChatDto = tracked(
-        settings = settingsRepo.current(),
-        scene = Scene.CHAT,
-        decision = cloudDecision(settingsRepo.current()),
-        titleOf = { it.reply.take(24).ifBlank { "聊天回复" } },
-        subtitleOf = { "风格：$style" },
-        metaOf = { it.meta },
-        payloadOf = { json.encodeToString(ChatDto.serializer(), it) },
-    ) {
+    suspend fun chatReply(context: String, style: String, goal: String = ""): ChatDto {
+        clearChatDecision()
         val s = settingsRepo.current()
-        api.chatReply(s.endpoint("chat/reply"), ChatReplyRequest(context, style))
+        val started = System.currentTimeMillis()
+        // 0.6B 决策模型只接短文本；长文本、未就绪和用户关闭端侧时直走原链路。
+        val observation = if (s.preferEdge && edgeState.value.ready && context.length <= 1000) {
+            edgeManager.observe(context)
+        } else null
+        _chatEdgeObservation.value = observation
+        val routeReason = when {
+            observation?.decision != null ->
+                "端侧已识别 ${observation.decision.scene}/${observation.decision.intent}；回复正文由云端生成"
+            observation?.failure != null -> "端侧判断失败，已回退云端：${observation.failure}"
+            context.length > 1000 -> "输入较长，直接由云端生成回复"
+            else -> cloudDecision(s).reason
+        }
+        val chosenGoal = goal.ifBlank {
+            observation?.decision?.takeIf {
+                it.scene == "chat" && it.intent == "reply_suggest"
+            }?.goal.orEmpty()
+        }
+        return tracked(
+            settings = s,
+            scene = Scene.CHAT,
+            decision = Router.Decision(ExecutorKind.CLOUD, routeReason),
+            startedAt = started,
+            edgeObservation = observation,
+            titleOf = { it.reply.take(24).ifBlank { "聊天回复" } },
+            subtitleOf = { "风格：$style" },
+            metaOf = { it.meta },
+            payloadOf = { json.encodeToString(ChatDto.serializer(), it) },
+        ) {
+            api.chatReply(s.endpoint("chat/reply"), ChatReplyRequest(context, style, chosenGoal))
+        }
     }
 
     suspend fun chatRewrite(text: String, style: String): ChatDto = tracked(
@@ -206,7 +233,7 @@ class MovaRepository(
 
     private fun cloudDecision(settings: MovaSettings): Router.Decision = Router.decide(
         scene = Scene.UNKNOWN,
-        edgeReady = _edgeState.value.ready,
+        edgeReady = edgeState.value.ready,
         edgePreferred = settings.preferEdge,
     )
 
@@ -225,13 +252,15 @@ class MovaRepository(
         settings: MovaSettings,
         scene: Scene,
         decision: Router.Decision,
+        startedAt: Long? = null,
+        edgeObservation: EdgeObservation? = null,
         titleOf: (T) -> String,
         subtitleOf: (T) -> String,
         metaOf: (T) -> MetaDto?,
         payloadOf: (T) -> String,
         block: suspend () -> T,
     ): T {
-        val started = System.currentTimeMillis()
+        val started = startedAt ?: System.currentTimeMillis()
         return try {
             val result = call(settings, settings.timeoutSeconds * 1000L, block)
             val elapsed = System.currentTimeMillis() - started
@@ -244,9 +273,13 @@ class MovaRepository(
                 model = meta?.model,
                 totalMs = elapsed,
                 serverMs = meta?.latencyMs,
-                stages = meta?.stages.orEmpty(),
+                stages = meta?.stages.orEmpty() +
+                    (edgeObservation?.takeIf { it.latencyMs > 0 }?.let {
+                        mapOf("edge_decision" to it.latencyMs)
+                    } ?: emptyMap()),
                 confidence = meta?.confidence,
-                routeReason = meta?.routeReason ?: decision.reason,
+                routeReason = if (edgeObservation != null) decision.reason
+                    else meta?.routeReason ?: decision.reason,
                 success = true,
             )
             pushTrace(trace)

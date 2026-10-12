@@ -1,33 +1,22 @@
 package com.mova.sceneai.ui.home
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.RestaurantMenu
+import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,256 +24,114 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.mova.sceneai.core.AppContainer
-import com.mova.sceneai.core.Fmt
 import com.mova.sceneai.core.movaViewModel
 import com.mova.sceneai.data.model.ExecutorKind
 import com.mova.sceneai.data.repo.EdgeRuntimeState
 import com.mova.sceneai.data.repo.SessionStats
-import com.mova.sceneai.ui.components.Dot
-import com.mova.sceneai.ui.components.MovaCard
-import com.mova.sceneai.ui.components.MovaScreen
-import com.mova.sceneai.ui.components.SectionHeader
-import com.mova.sceneai.ui.components.SolidActionButton
+import com.mova.sceneai.ui.components.*
 import com.mova.sceneai.ui.nav.Routes
-import com.mova.sceneai.ui.theme.LocalMovaSemanticColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
-/**
- * 首页。
- *
- * 信息优先级刻意排成：
- *   ① 现在能不能用（连接状态）→ ② 要不要它主动（总开关）
- *   → ③ 能做什么（场景卡，每个都有"试试看"）→ ④ 它今天做了什么（端云占比）
- *
- * 新用户不需要读任何说明就能走完这条线。
- */
+/** 首页用具体的小求助组织入口，运行状态来自真实模型与服务检测。 */
 @Composable
-fun HomeScreen(
-    onOpenScene: (String) -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenTech: () -> Unit,
-) {
+fun HomeScreen(onOpenScene: (String) -> Unit, onOpenSettings: () -> Unit, onOpenTech: () -> Unit) {
     val vm = movaViewModel { HomeViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
-
     LaunchedEffect(Unit) { vm.refresh() }
-
-    MovaScreen(title = "Mova-AI", subtitle = "不是等你开口，而是在你需要的那一刻，刚好出现") {
-        ConnectionCard(
-            status = state.status,
-            detail = state.statusDetail,
-            onOpenSettings = onOpenSettings,
-            onRetry = vm::refresh,
-        )
-
-        MovaCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("场景主动提醒", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "在合适的时机主动帮忙，而不是等你开口",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = state.proactiveEnabled, onCheckedChange = vm::setProactive)
+    MovaScreen(title = "Mova / 照应", subtitle = "日常的小求助，从这里开始", actions = {
+        Text(LocalDate.now().format(DateTimeFormatter.ofPattern("MM.dd")), style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 20.dp))
+    }) {
+        HomeHero { onOpenScene(Routes.CHAT) }
+        MovaCard(onClick = onOpenSettings, contentPadding = 15) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Readiness(if (state.edge.ready) "手机理解已就绪" else "端侧模型待导入", state.edge.ready, Modifier.weight(1f))
+                Readiness(if (state.status == HomeStatus.CLOUD_OK) "回复服务已连接" else "回复服务待连接", state.status == HomeStatus.CLOUD_OK, Modifier.weight(1f))
             }
         }
-
-        SectionHeader("试试这些能力", "每个都准备了一份示例，点一下就能看到结果")
-
-        SceneGrid(onOpenScene = onOpenScene)
-
-        SectionHeader("今日概览", "端云协同的实际分布")
-
-        MovaCard(onClick = onOpenTech) {
-            Column {
+        Spacer(Modifier.height(2.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("给日常一点余地", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Text("02 / DAILY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            DailyCard("读懂一页", "把长材料，变成清楚的下一步", Icons.Filled.AutoStories, Modifier.weight(1f)) { onOpenScene(Routes.READING) }
+            DailyCard("好好吃饭", "从手边的食材，开始一顿饭", Icons.Filled.RestaurantMenu, Modifier.weight(1f)) { onOpenScene(Routes.FOOD) }
+        }
+        MovaCard(onClick = { onOpenScene(Routes.CHAT) }, contentPadding = 22) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("一个日常的停顿", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text("想拒绝，\n也想把关系照顾好。", style = MaterialTheme.typography.headlineSmall)
+                Text("带来一句消息，补充你的处境。先明确自己的目标，再选择适合的表达。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.Insights,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    Text("试试沟通辅助", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.width(8.dp))
-                    Text("今日：${state.stats.total} 次请求", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        "查看详情 ›",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    StatPill("端侧", "${state.stats.edgeCount}", LocalMovaSemanticColors.current.edge)
-                    StatPill("云端", "${state.stats.cloudCount}", LocalMovaSemanticColors.current.cloud)
-                    StatPill(
-                        "平均耗时",
-                        Fmt.duration(state.stats.avgMs?.toLong()),
-                        MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (!state.edge.ready) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "端侧模型尚未接入，当前全部由云端完成。接入后这里会开始出现端侧调用。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun StatPill(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Dot(color, size = 8)
-        Spacer(Modifier.width(6.dp))
-        Column {
-            Text(value, style = MaterialTheme.typography.titleSmall, color = color)
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/** 连接状态卡：三种形态，颜色语义与设计文档严格一致。 */
-@Composable
-private fun ConnectionCard(
-    status: HomeStatus,
-    detail: String,
-    onOpenSettings: () -> Unit,
-    onRetry: () -> Unit,
-) {
-    val semantic = LocalMovaSemanticColors.current
-    val (dot, container) = when (status) {
-        HomeStatus.CLOUD_OK -> semantic.success to MaterialTheme.colorScheme.surfaceContainer
-        HomeStatus.EDGE_ONLY -> semantic.edge to semantic.edgeContainer
-        HomeStatus.UNAVAILABLE -> semantic.warning to semantic.warningContainer
-        HomeStatus.CHECKING -> MaterialTheme.colorScheme.outline to MaterialTheme.colorScheme.surfaceContainer
-    }
-    MovaCard(containerColor = container) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Dot(dot, size = 10)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    when (status) {
-                        HomeStatus.CLOUD_OK -> "云端已连接"
-                        HomeStatus.EDGE_ONLY -> "端侧模型运行中"
-                        HomeStatus.UNAVAILABLE -> "无法连接服务"
-                        HomeStatus.CHECKING -> "正在检测服务…"
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            when (status) {
-                HomeStatus.UNAVAILABLE -> TextButton(onClick = onOpenSettings) { Text("去设置") }
-                HomeStatus.CHECKING -> Unit
-                else -> TextButton(onClick = onRetry) { Text("刷新") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SceneGrid(onOpenScene: (String) -> Unit) {
-    val scenes = remember {
-        listOf(
-            SceneItem(Routes.FOOD, "🍜", "做饭助手", "拍食材，出菜谱", true),
-            SceneItem(Routes.READING, "📄", "阅读总结", "文本 / 图片 / PDF", true),
-            SceneItem(Routes.CHAT, "💬", "聊天辅助", "帮你把话说好", true),
-            SceneItem(null, "📍", "位置提示", "到了超市提醒你", false),
-        )
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        scenes.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { item ->
-                    SceneCard(item, Modifier.weight(1f), onOpenScene)
-                }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-private data class SceneItem(
-    val route: String?,
-    val emoji: String,
-    val name: String,
-    val desc: String,
-    val available: Boolean,
-)
-
-@Composable
-private fun SceneCard(item: SceneItem, modifier: Modifier, onOpenScene: (String) -> Unit) {
-    val semantic = LocalMovaSemanticColors.current
-    MovaCard(
-        modifier = modifier,
-        containerColor = if (item.available) MaterialTheme.colorScheme.surfaceContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column {
+        MovaCard(onClick = onOpenTech, contentPadding = 18) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(item.emoji, fontSize = 26.sp)
-                Spacer(Modifier.weight(1f))
-                if (!item.available) {
-                    Text(
-                        "规划中",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Icon(Icons.Filled.CheckCircleOutline, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("理解在手机，表达有选择", style = MaterialTheme.typography.titleSmall)
+                    Text(if (state.stats.total > 0) "今日 ${state.stats.total} 次请求 · 查看实际运行记录" else "查看本机模型与端云协同的运行证据", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(18.dp))
             }
-            Spacer(Modifier.height(10.dp))
-            Text(item.name, style = MaterialTheme.typography.titleSmall)
-            Text(
-                item.desc,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                minLines = 2,
-            )
+        }
+        Text("小事有人接住，生活慢慢上手。", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 10.dp))
+    }
+}
+
+@Composable
+private fun HomeHero(onChat: () -> Unit) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(Brush.linearGradient(listOf(MovaInk, Color(0xFF294A40))))) {
+        MovaOrb(Modifier.align(Alignment.TopEnd).offset(x = 34.dp, y = 14.dp).size(210.dp))
+        Column(Modifier.fillMaxWidth().padding(24.dp)) {
+            Text("A LITTLE HELP, RIGHT HERE", color = MovaMint, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(22.dp))
+            Text("先照顾好\n这一刻。", color = Color(0xFFFFF6E9), fontSize = 36.sp, lineHeight = 46.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(12.dp))
-            if (item.available && item.route != null) {
-                SolidActionButton(
-                    text = "试试看",
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = Icons.Filled.Bolt,
-                ) { onOpenScene(item.route) }
-            } else {
-                Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        "敬请期待",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = semantic.warning,
-                    )
-                }
+            Text("离家后的日常，\n也值得被认真照应。", color = Color(0xFFD4DED3), fontSize = 14.sp, lineHeight = 23.sp)
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onChat, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MovaPeach, contentColor = MovaInk)) {
+                Text("把这句话说好", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(20.dp))
             }
         }
     }
 }
 
-// ============================================================
-// ViewModel
-// ============================================================
+@Composable
+private fun Readiness(text: String, ready: Boolean, modifier: Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Dot(if (ready) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, 6)
+        Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun DailyCard(title: String, desc: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
+    MovaCard(modifier, onClick = onClick, contentPadding = 18) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(46.dp).background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(25.dp))
+            }
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(desc, minLines = 2, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 
 enum class HomeStatus { CHECKING, CLOUD_OK, EDGE_ONLY, UNAVAILABLE }
 
@@ -339,7 +186,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     _state.value = _state.value.copy(
                         status = if (edgeReady) HomeStatus.EDGE_ONLY else HomeStatus.UNAVAILABLE,
                         statusDetail = if (edgeReady) {
-                            "${_state.value.edge.name ?: "端侧模型"} · 离线可用"
+                            "端侧判断可用，但回复正文仍需云端服务"
                         } else {
                             "服务没响应，端侧模型也尚未接入"
                         },

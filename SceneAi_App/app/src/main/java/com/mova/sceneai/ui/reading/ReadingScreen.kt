@@ -67,7 +67,8 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
         onPdf = { vm.readPdf(it) },
     )
 
-    MovaScreen(title = "阅读总结", subtitle = "长文、截图、PDF，一键抓住重点", onBack = onBack) {
+    MovaScreen(title = "读懂一页", subtitle = "把长材料，变成清楚的下一步", onBack = onBack) {
+        com.mova.sceneai.ui.components.StoryIntro("02", "先抓住重点，再做决定", "带来一段文字、截图或 PDF。先看摘要与要点，关键事项回到原文核对。")
 
         TabRow(selectedTabIndex = tab) {
             listOf("粘贴文本", "截图识别", "PDF 文档").forEachIndexed { index, label ->

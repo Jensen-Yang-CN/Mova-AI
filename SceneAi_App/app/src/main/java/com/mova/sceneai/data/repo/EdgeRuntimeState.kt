@@ -20,14 +20,16 @@ data class EdgeRuntimeState(
     val statusLabel: String
         get() = when {
             ready -> "端侧模型运行中"
+            loadingError != null -> "端侧模型加载失败"
             deployed -> "端侧模型加载中…"
             else -> "端侧模型未部署"
         }
 
     val unavailableReason: String?
         get() = when {
+            loadingError != null -> loadingError
             ready -> null
             deployed -> "模型文件已就位，正在加载"
-            else -> "端侧小模型尚未接入；接入后离线也能使用部分能力"
+            else -> "请在设置中导入 Q4_K_M 模型；正文生成仍需云端服务"
         }
 }

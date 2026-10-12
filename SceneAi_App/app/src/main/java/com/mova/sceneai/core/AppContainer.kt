@@ -5,9 +5,14 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mova.sceneai.MovaApp
+import com.mova.sceneai.data.edge.EdgeModelManager
 import com.mova.sceneai.data.local.LocalStore
 import com.mova.sceneai.data.remote.ApiFactory
 import com.mova.sceneai.data.repo.MovaRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * 手写的依赖容器。
@@ -22,6 +27,8 @@ class AppContainer(context: Context) {
     val json = ApiFactory.json
     val settings = SettingsRepository(appContext)
     val store = LocalStore(appContext, json)
+    val edge = EdgeModelManager(appContext)
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** 接收其它 App 分享过来的文字（微信长按消息 → 分享 → Mova-AI） */
     val sharedInbox = SharedInbox()
@@ -32,7 +39,13 @@ class AppContainer(context: Context) {
         settingsRepo = settings,
         store = store,
         json = json,
+        edgeManager = edge,
     )
+
+    init {
+        // 文件校验与 GGUF 加载可能持续数秒，不能阻塞首屏线程。
+        appScope.launch { edge.restore() }
+    }
 }
 
 /**

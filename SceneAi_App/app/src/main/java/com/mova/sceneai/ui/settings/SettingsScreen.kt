@@ -1,6 +1,9 @@
 package com.mova.sceneai.ui.settings
 
 import android.app.TimePickerDialog
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,6 +48,7 @@ import com.mova.sceneai.ui.theme.LocalMovaSemanticColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -62,6 +66,9 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showClearConfirm by remember { mutableStateOf(false) }
+    val modelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.installEdgeModel(uri)
+    }
 
     LaunchedEffect(Unit) { vm.load() }
 
@@ -102,7 +109,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                     )
                 }
                 Spacer(Modifier.height(14.dp))
-                Text("请求超时", style = MaterialTheme.typography.titleSmall)
+                Text("云端请求超时", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(8.dp))
                 MovaChipRow(
                     options = listOf("30 秒", "60 秒", "120 秒"),
@@ -119,7 +126,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
         }
 
         // ---------- 主动智能 ----------
-        SectionHeader("主动智能", "决定它会不会在你没开口时出现")
+        SectionHeader("提醒偏好 · 实验功能", "当前版本以用户主动提交的内容为入口")
         MovaCard {
             Column {
                 SwitchRow(
@@ -176,7 +183,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "它对应触发决策里「打扰成本」的权重：越安静，越需要更强的信号才会出现。",
+                    "这些偏好目前仅保存在本机；位置与后台自动触发仍在规划中。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -184,17 +191,27 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
         }
 
         // ---------- 端侧模型 ----------
-        SectionHeader("端侧模型", "离线可用能力的来源")
+        SectionHeader("端侧模型", "本机进行场景与意图判断")
         MovaCard {
             Column {
                 KeyValueRow("状态", state.edge.statusLabel)
                 KeyValueRow("模型", state.edge.name ?: "未配置")
                 KeyValueRow("量化位宽", state.edge.quantization ?: "—")
                 Spacer(Modifier.height(12.dp))
+                OutlinedActionButton(
+                    text = if (state.importingEdge) "正在校验并加载模型…" else "导入 Q4_K_M 模型",
+                    onClick = { if (!state.importingEdge) modelPicker.launch(arrayOf("*/*")) },
+                )
+                Text(
+                    "从手机存储选择本项目的 GGUF（约 397 MB）；App 会核对 SHA-256 后加载。模型不上传服务器。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
                 SwitchRow(
                     title = "优先使用端侧",
                     desc = if (state.edge.ready) {
-                        "简单的判断留在本地，复杂任务自动升级云端"
+                        "聊天意图先在本地判断；回复正文仍由云端生成"
                     } else {
                         "端侧模型接入后可用"
                     },
@@ -202,7 +219,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                     enabled = state.edge.ready,
                     onCheckedChange = vm::setPreferEdge,
                 )
-                if (!state.edge.ready) {
+                if (!state.edge.ready || state.edge.loadingError != null) {
                     Spacer(Modifier.height(10.dp))
                     InfoBanner(
                         text = state.edge.unavailableReason
@@ -332,6 +349,7 @@ data class SettingsUiState(
     val preferEdge: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val edge: EdgeRuntimeState = EdgeRuntimeState(),
+    val importingEdge: Boolean = false,
     val historyCount: Int = 0,
     val testing: Boolean = false,
     val healthOk: Boolean = false,
@@ -372,6 +390,22 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun onBaseUrlChange(value: String) {
         _state.value = _state.value.copy(baseUrl = value, healthMessage = null)
+    }
+
+    fun installEdgeModel(uri: Uri) {
+        if (_state.value.importingEdge) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(importingEdge = true)
+            try {
+                container.repository.installEdgeModel(uri)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // EdgeModelManager 已在 edgeState.loadingError 中写入具体原因。
+            } finally {
+                _state.value = _state.value.copy(importingEdge = false)
+            }
+        }
     }
 
     fun saveAndTest() {

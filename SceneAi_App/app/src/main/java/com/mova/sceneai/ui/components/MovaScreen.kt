@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,8 +38,8 @@ fun MovaScreen(
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     scrollable: Boolean = true,
-    horizontalPadding: Int = 16,
-    verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(12.dp),
+    horizontalPadding: Int = 20,
+    verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(16.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(modifier.fillMaxSize()) {
@@ -71,9 +72,10 @@ fun MovaScreen(
 
         val contentModifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .let { if (scrollable) it.verticalScroll(rememberScrollState()) else it }
             .padding(horizontal = horizontalPadding.dp)
-            .padding(bottom = 20.dp)
+            .padding(top = 8.dp, bottom = 28.dp)
 
         Column(
             modifier = contentModifier,

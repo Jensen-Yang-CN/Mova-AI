@@ -1,0 +1,2 @@
+# Qwen3 推理提示的换行属于模型输入；Windows checkout 也必须保留 LF。
+SceneAi_App/app/src/main/assets/edge_prompt.template.txt text eol=lf whitespace=-blank-at-eof

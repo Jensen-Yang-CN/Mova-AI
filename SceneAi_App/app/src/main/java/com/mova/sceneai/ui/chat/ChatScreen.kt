@@ -20,6 +20,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import com.mova.sceneai.MovaApp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +49,9 @@ import com.mova.sceneai.ui.components.MovaChipRow
 import com.mova.sceneai.ui.components.MovaScreen
 import com.mova.sceneai.ui.components.OutlinedActionButton
 import com.mova.sceneai.ui.components.SolidActionButton
+import com.mova.sceneai.ui.components.StoryIntro
+import com.mova.sceneai.core.Fmt
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.mova.sceneai.ui.theme.LocalMovaSemanticColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,7 +70,7 @@ import kotlinx.coroutines.launch
  * ① **手动输入**：用户自己把对方的话粘进来。
  * ② **系统分享**：在微信里长按对方的消息 → 分享 → Mova-AI。
  *    内容经 `MainActivity` → [com.mova.sceneai.core.SharedInbox] → 本页 ViewModel，
- *    自动填入并立刻生成建议。
+ *    填入输入框，由用户确认后生成建议。
  *
  * 刻意**不做**无障碍读屏自动抓取：那虽然能自动感知"你正在用微信"，但违反微信
  * 服务协议、在 Android 13+ 上需要用户手动解除「受限设置」，且涉及第三方个人信息
@@ -75,15 +80,18 @@ import kotlinx.coroutines.launch
 fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
     val vm = movaViewModel { ChatViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val localDecision by vm.localObservation.collectAsStateWithLifecycle()
+    val pendingShare by MovaApp.instance.container.sharedInbox.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingShare) { if (pendingShare != null) vm.consumeSharedInput() }
     val semantic = LocalMovaSemanticColors.current
 
-    MovaScreen(title = "聊天辅助", subtitle = "帮你把话说好，但决定权在你", onBack = onBack) {
+    MovaScreen(title = "把话说好", subtitle = "有自己的边界，也能照顾关系", onBack = onBack) {
+        StoryIntro("01", "先确认你的想法，再找到表达", "一句难回复的消息，也值得慢慢说。带来消息与背景，选好目标，最后由你确认。")
 
         // 从别的 App 分享进来时的提示条：让用户明白这句话是从哪来的、正在发生什么
         state.fromShare?.let { source ->
             InfoBanner(
-                text = "${source.label}：内容已填入下方，正在生成回复建议。" +
-                    "这是你主动分享的，App 不会读取其它应用的界面。",
+                text = "${source.label}：内容已填入。确认沟通目标后，点击生成。",
                 icon = Icons.Filled.Share,
                 container = semantic.successContainer,
                 contentColor = semantic.onSuccessContainer,
@@ -109,9 +117,10 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                 )
             },
             modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp),
+            shape = RoundedCornerShape(20.dp),
         )
 
-        Text("风格", style = MaterialTheme.typography.titleSmall)
+        Text("想怎样表达？", style = MaterialTheme.typography.titleSmall)
         MovaChipRow(
             options = ChatViewModel.STYLES,
             selected = state.style,
@@ -119,9 +128,9 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
         )
 
         if (state.mode == ChatMode.REPLY) {
-            Text("沟通目标", style = MaterialTheme.typography.titleSmall)
+            Text("这次，你想达到什么目标？", style = MaterialTheme.typography.titleSmall)
             Text(
-                "设定目标后，AI 会据此选择策略，而不只是换词",
+                "明确选择会优先采用；你可以随时改变主意",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -134,6 +143,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
 
         // ---------- 多轮上下文（可展开） ----------
         MovaCard {
+            Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("带入多轮上下文", style = MaterialTheme.typography.titleSmall)
@@ -151,17 +161,9 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 state.messages.forEachIndexed { index, message ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            if (message.role == "user") "我" else "对方",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.width(36.dp),
-                        )
-                        Text(
-                            message.content,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f),
-                        )
+                        TextButton(onClick = { vm.toggleMessageRole(index) }) { Text(if (message.role == "user") "我" else "对方") }
+                        OutlinedTextField(value = message.content, onValueChange = { vm.updateMessage(index, it) },
+                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp), label = { Text("历史消息") })
                         TextButton(onClick = { vm.removeMessage(index) }) { Text("删除") }
                     }
                 }
@@ -175,7 +177,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                state.messages.forEachIndexed { index, _ -> }
+            }
             }
         }
 
@@ -195,8 +197,19 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
         if (state.load.isLoading) {
             LoadingStages(
                 stages = listOf("正在理解这句话…", "正在生成候选与解释…"),
-                activeIndex = 1,
+                activeIndex = if (localDecision == null) 0 else 1,
             )
+        }
+
+        localDecision?.decision?.let { decision ->
+            MovaCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("手机已理解你的需求", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Text("${decision.goal ?: "根据语境回复"} · ${decision.slots.optString("target_tone", "自然")} · ${Fmt.duration(localDecision?.latencyMs)}",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Text(if (state.load.isLoading) "正在组织可选择的表达，最后由你确认。" else "本地理解已完成。看过回复后，再决定怎样表达。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
         }
 
         (state.load as? LoadState.Failed)?.let {
@@ -220,12 +233,12 @@ private fun ChatResultCard(dto: ChatDto, onRegenerate: () -> Unit) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "推荐回复",
+                        "你可以这样说",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                     Spacer(Modifier.weight(1f))
-                    CopyIconButton(dto.reply, toast = "已复制这条回复")
+                    CopyIconButton(dto.reply, toast = "已复制，确认后再发送")
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -325,39 +338,43 @@ data class ChatUiState(
  *
  * 除了常规的输入/风格/目标管理，它还承担一件特殊的事：
  * **在页面创建时消费一次 [com.mova.sceneai.core.SharedInbox] 里的分享内容**，
- * 填进输入框并自动生成。这让"从微信分享进来"变成一个零操作的动作。
+ * 填进输入框，等待用户确认生成。这让"从微信分享进来"变成一个零操作的动作。
  *
  * 用 `XxxUiState` + `StateFlow` 表达状态，Composable 只负责渲染 ——
  * 因此"加载中 / 成功 / 失败 / 来源是分享"这些分支在界面上是显式的，
  * 不会出现"某个状态下界面不知道该显示什么"。
  */
 class ChatViewModel(private val container: AppContainer) : ViewModel() {
+    val localObservation get() = container.repository.chatEdgeObservation
 
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     init {
-        // 页面被创建时先看一眼收件箱：如果是"分享进来"的，直接填好并开始生成。
+        // 页面被创建时先看一眼收件箱：如果是"分享进来"的，直接填好并等待确认。
         // 放在 init 里而不是 Composable 的 LaunchedEffect 里，是为了让
         // "分享 → 生成"这条链路只被触发一次，即使页面因配置变化重组也不会重复请求。
         consumeSharedInput()
     }
 
-    private fun consumeSharedInput() {
+    fun consumeSharedInput() {
+        container.repository.clearChatDecision()
         val shared = container.sharedInbox.take() ?: return
         _state.value = _state.value.copy(
             mode = ChatMode.REPLY,
             input = shared.text,
             fromShare = shared.source,
         )
-        generate()
+        // 分享只预填；发送给云端生成前，由用户确认目标并主动点击。
     }
 
     fun setMode(mode: ChatMode) {
+        container.repository.clearChatDecision()
         _state.value = _state.value.copy(mode = mode, load = LoadState.Idle)
     }
 
     fun onInputChange(value: String) {
+        container.repository.clearChatDecision()
         // 用户一旦手动改动内容，就不再强调"来自分享"
         _state.value = _state.value.copy(input = value, fromShare = null)
     }
@@ -385,10 +402,23 @@ class ChatViewModel(private val container: AppContainer) : ViewModel() {
         _state.value = _state.value.copy(messages = next)
     }
 
+    /** 历史消息可编辑并可切换说话人，显式上下文会走原有云端多轮接口。 */
+    fun updateMessage(index: Int, text: String) {
+        _state.value = _state.value.copy(messages = _state.value.messages.mapIndexed { i, message ->
+            if (i == index) message.copy(content = text) else message
+        })
+    }
+
+    fun toggleMessageRole(index: Int) {
+        _state.value = _state.value.copy(messages = _state.value.messages.mapIndexed { i, message ->
+            if (i == index) message.copy(role = if (message.role == "user") "assistant" else "user") else message
+        })
+    }
+
     fun useSample() {
         _state.value = _state.value.copy(
             mode = ChatMode.REPLY,
-            input = "这周六我们部门团建，去郊区烧烤，你能来吗？",
+            input = "帮我拟一段短信回复给合伙人，背景是他想让我帮忙搬家，但我那天要出远门",
             style = "委婉",
             goal = "拒绝",
         )
@@ -397,6 +427,7 @@ class ChatViewModel(private val container: AppContainer) : ViewModel() {
     fun generate() {
         val s = _state.value
         if (s.input.isBlank()) return
+        container.repository.clearChatDecision()
         viewModelScope.launch {
             _state.value = s.copy(load = LoadState.Loading)
             val result = runCatching {
@@ -406,7 +437,10 @@ class ChatViewModel(private val container: AppContainer) : ViewModel() {
                     ChatMode.REPLY -> {
                         val validHistory = s.messages.filter { it.content.isNotBlank() }
                         if (validHistory.isEmpty()) {
-                            container.repository.chatReply(s.input, s.style)
+                            container.repository.chatReply(
+                                s.input, s.style,
+                                if (s.goal == "不指定") "" else s.goal,
+                            )
                         } else {
                             // 把"对方刚说的这句"作为最后一条，历史在前
                             val conversation = validHistory + ChatMessage("assistant", s.input)
