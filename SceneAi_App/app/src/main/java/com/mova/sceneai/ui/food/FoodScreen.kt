@@ -68,12 +68,12 @@ fun FoodScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
     )
 
     MovaScreen(title = "好好吃饭", subtitle = "从手边的食材，开始一顿饭", onBack = onBack) {
-        com.mova.sceneai.ui.components.StoryIntro("03", "给自己做一顿饭", "拍下手边的食材，看看可以做什么。建议供参考，食材安全仍需自己确认。")
+        com.mova.sceneai.ui.components.StoryIntro("03", "一顿认真做的饭，\n也是对自己的照应。", "拍下手边的食材，找到这顿饭的灵感。食材安全仍需自己确认。")
 
         if (state.stage < 0 && state.result == null) {
             MovaCard {
                 Column {
-                    Text("三种开始方式", style = MaterialTheme.typography.titleSmall)
+                    com.mova.sceneai.ui.components.TaskStep("1", "从手边的食材开始")
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "没有食材照片也没关系，先点「试试示例」看看效果。",

@@ -1,14 +1,13 @@
 package com.mova.sceneai.ui.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.RestaurantMenu
-import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,13 +15,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.mova.sceneai.R
 import com.mova.sceneai.core.AppContainer
 import com.mova.sceneai.core.movaViewModel
 import com.mova.sceneai.data.model.ExecutorKind
@@ -38,81 +40,79 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/** 首页用具体的小求助组织入口，运行状态来自真实模型与服务检测。 */
+/** 首页突出四个具体任务。状态点来自真实检测，装饰不使用虚构的运行数据。 */
 @Composable
 fun HomeScreen(onOpenScene: (String) -> Unit, onOpenSettings: () -> Unit, onOpenTech: () -> Unit) {
     val vm = movaViewModel { HomeViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.refresh() }
-    MovaScreen(title = "Mova / 照应", subtitle = "日常的小求助，从这里开始", actions = {
-        Text(LocalDate.now().format(DateTimeFormatter.ofPattern("MM.dd")), style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 20.dp))
+    MovaScreen(title = "Mova · 照应", subtitle = "让日常，多一点从容",
+        verticalArrangement = Arrangement.spacedBy(12.dp), actions = {
+        Text(LocalDate.now().format(DateTimeFormatter.ofPattern("MM / dd")),
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 20.dp))
     }) {
         HomeHero { onOpenScene(Routes.CHAT) }
-        MovaCard(onClick = { onOpenScene(Routes.CITY) }, contentPadding = 20) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("城市初见 · 一份旅途中的照应", style = MaterialTheme.typography.titleMedium)
-                Text("原地播放模拟行程，或开启本次真实出行 →", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpenSettings)
+            .background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 14.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Readiness(if (state.edge.ready) "手机理解已就绪" else "端侧模型待导入", state.edge.ready, Modifier.weight(1f))
+            Readiness(if (state.status == HomeStatus.CLOUD_OK) "回复服务已连接" else "回复服务待连接",
+                state.status == HomeStatus.CLOUD_OK, Modifier.weight(1f))
         }
-        MovaCard(onClick = onOpenSettings, contentPadding = 15) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Readiness(if (state.edge.ready) "手机理解已就绪" else "端侧模型待导入", state.edge.ready, Modifier.weight(1f))
-                Readiness(if (state.status == HomeStatus.CLOUD_OK) "回复服务已连接" else "回复服务待连接", state.status == HomeStatus.CLOUD_OK, Modifier.weight(1f))
-            }
-        }
-        Spacer(Modifier.height(2.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("给日常一点余地", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            Text("02 / DAILY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("从一件小事开始", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text("YOUR DAILY SPACE", fontSize = 9.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DailyCard("读懂一页", "把长材料，变成清楚的下一步", Icons.Filled.AutoStories, Modifier.weight(1f)) { onOpenScene(Routes.READING) }
-            DailyCard("好好吃饭", "从手边的食材，开始一顿饭", Icons.Filled.RestaurantMenu, Modifier.weight(1f)) { onOpenScene(Routes.FOOD) }
+            SceneTile("01", "把话说好", "给表达留一点余地", Modifier.weight(1f)) { onOpenScene(Routes.CHAT) }
+            SceneTile("02", "读懂一页", "重点清楚，思路轻一点", Modifier.weight(1f)) { onOpenScene(Routes.READING) }
         }
-        MovaCard(onClick = { onOpenScene(Routes.CHAT) }, contentPadding = 22) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("一个日常的停顿", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Text("想拒绝，\n也想把关系照顾好。", style = MaterialTheme.typography.headlineSmall)
-                Text("带来一句消息，补充你的处境。先明确自己的目标，再选择适合的表达。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("试试沟通辅助", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                }
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SceneTile("03", "好好吃饭", "照顾自己，从一顿饭开始", Modifier.weight(1f)) { onOpenScene(Routes.FOOD) }
+            SceneTile("04", "城市初见", "陌生的地方，也有照应", Modifier.weight(1f)) { onOpenScene(Routes.CITY) }
         }
-        MovaCard(onClick = onOpenTech, contentPadding = 18) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.CheckCircleOutline, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(12.dp))
+        MovaCard(onClick = onOpenTech, contentPadding = 17) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Filled.Insights, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("理解在手机，表达有选择", style = MaterialTheme.typography.titleSmall)
-                    Text(if (state.stats.total > 0) "今日 ${state.stats.total} 次请求 · 查看实际运行记录" else "查看本机模型与端云协同的运行证据", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("看见 AI 如何工作", style = MaterialTheme.typography.titleSmall)
+                    Text("手机理解 · 云端协作 · 真实运行记录", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(18.dp))
             }
         }
-        Text("小事有人接住，生活慢慢上手。", style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 10.dp))
+        Text("小事有人接住，生活慢慢上手。", style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 6.dp))
     }
 }
 
+/** 头图只提供氛围；文字、状态与按钮均为原生组件，缩放字体后仍可布局。 */
 @Composable
 private fun HomeHero(onChat: () -> Unit) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(Brush.linearGradient(listOf(MovaInk, Color(0xFF294A40))))) {
-        MovaOrb(Modifier.align(Alignment.TopEnd).offset(x = 34.dp, y = 14.dp).size(210.dp))
-        Column(Modifier.fillMaxWidth().padding(24.dp)) {
-            Text("A LITTLE HELP, RIGHT HERE", color = MovaMint, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(22.dp))
-            Text("先照顾好\n这一刻。", color = Color(0xFFFFF6E9), fontSize = 36.sp, lineHeight = 46.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(12.dp))
-            Text("离家后的日常，\n也值得被认真照应。", color = Color(0xFFD4DED3), fontSize = 14.sp, lineHeight = 23.sp)
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onChat, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(18.dp),
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(MovaInk)) {
+        Image(painterResource(R.drawable.mova_hero_v3), null, Modifier.matchParentSize(),
+            contentScale = ContentScale.Crop, alignment = Alignment.CenterEnd)
+        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(
+            0f to MovaInk.copy(.80f), .50f to MovaInk.copy(.36f), 1f to Color.Transparent)))
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(
+            0f to Color.Transparent, .65f to Color.Transparent, 1f to MovaInk.copy(.92f))))
+        Column(Modifier.fillMaxWidth().padding(22.dp)) {
+            Text("A LITTLE HELP, RIGHT HERE", style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.sp, letterSpacing = 1.2.sp), color = MovaMint)
+            Spacer(Modifier.height(17.dp))
+            Text("先照顾好\n这一刻。", style = MaterialTheme.typography.displaySmall.copy(
+                fontSize = 34.sp, lineHeight = 45.sp, fontWeight = FontWeight.Bold), color = Color.White)
+            Spacer(Modifier.height(11.dp))
+            Text("难回的消息、陌生的城市，\n日常里的小事，慢慢来。",
+                style = MaterialTheme.typography.bodySmall, color = Color(0xFFD7E9E6))
+            Spacer(Modifier.height(17.dp))
+            Button(onClick = onChat, modifier = Modifier.fillMaxWidth().height(51.dp),
+                shape = RoundedCornerShape(15.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MovaPeach, contentColor = MovaInk)) {
-                Text("把这句话说好", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("先把话说好", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(20.dp))
             }
         }
@@ -121,21 +121,28 @@ private fun HomeHero(onChat: () -> Unit) {
 
 @Composable
 private fun Readiness(text: String, ready: Boolean, modifier: Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        Dot(if (ready) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline, 6)
-        Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Dot(if (ready) Color(0xFF3D9585) else MaterialTheme.colorScheme.outline, 5)
+        Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
+/** 四张任务卡具有相同尺寸与交互；图形负责辨识场景，文字负责解释行动。 */
 @Composable
-private fun DailyCard(title: String, desc: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    MovaCard(modifier, onClick = onClick, contentPadding = 18) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(46.dp).background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(25.dp))
+private fun SceneTile(index: String, title: String, description: String, modifier: Modifier, onClick: () -> Unit) {
+    Box(modifier.clip(RoundedCornerShape(23.dp)).background(sceneSurface(index)).clickable(onClick = onClick)) {
+        SceneGlyph(index, Modifier.align(Alignment.TopEnd).padding(top = 1.dp, end = 1.dp).size(91.dp))
+        Column(Modifier.fillMaxWidth().padding(17.dp)) {
+            Text(index, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(35.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(desc, minLines = 2, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            Text(description, style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

@@ -86,59 +86,63 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
     val semantic = LocalMovaSemanticColors.current
 
     MovaScreen(title = "把话说好", subtitle = "有自己的边界，也能照顾关系", onBack = onBack) {
-        StoryIntro("01", "先确认你的想法，再找到表达", "一句难回复的消息，也值得慢慢说。带来消息与背景，选好目标，最后由你确认。")
+        StoryIntro("01", "有自己的边界，\n也有好的表达。", "带来一句消息，补充你的处境。选好目标，最后由你确认。")
 
-        // 从别的 App 分享进来时的提示条：让用户明白这句话是从哪来的、正在发生什么
-        state.fromShare?.let { source ->
-            InfoBanner(
-                text = "${source.label}：内容已填入。确认沟通目标后，点击生成。",
-                icon = Icons.Filled.Share,
-                container = semantic.successContainer,
-                contentColor = semantic.onSuccessContainer,
-            )
-        }
+        MovaCard(contentPadding = 18) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                com.mova.sceneai.ui.components.TaskStep("1", "带来这次对话")
 
-        MovaChipRow(
-            options = listOf("回复对方", "润色我的话"),
-            selected = if (state.mode == ChatMode.REPLY) "回复对方" else "润色我的话",
-            onSelect = { vm.setMode(if (it == "回复对方") ChatMode.REPLY else ChatMode.REWRITE) },
-        )
+                // 从别的 App 分享进来时的提示条：让用户明白这句话是从哪来的、正在发生什么
+                state.fromShare?.let { source ->
+                    InfoBanner(
+                        text = "${source.label}：内容已填入。确认沟通目标后，点击生成。",
+                        icon = Icons.Filled.Share,
+                        container = semantic.successContainer,
+                        contentColor = semantic.onSuccessContainer,
+                    )
+                }
 
-        OutlinedTextField(
-            value = state.input,
-            onValueChange = vm::onInputChange,
-            label = {
-                Text(if (state.mode == ChatMode.REPLY) "对方说了什么？" else "我想改写哪句话？")
-            },
-            placeholder = {
-                Text(
-                    if (state.mode == ChatMode.REPLY) "把对方的消息粘贴进来…"
-                    else "把你想说的话写进来…"
+                com.mova.sceneai.ui.components.MovaSegmentedTabs(listOf("回复对方", "润色我的话"),
+                    if (state.mode == ChatMode.REPLY) 0 else 1,
+                    { vm.setMode(if (it == 0) ChatMode.REPLY else ChatMode.REWRITE) })
+
+                OutlinedTextField(
+                    value = state.input,
+                    onValueChange = vm::onInputChange,
+                    label = {
+                        Text(if (state.mode == ChatMode.REPLY) "对方说了什么？" else "我想改写哪句话？")
+                    },
+                    placeholder = {
+                        Text(
+                            if (state.mode == ChatMode.REPLY) "把对方的消息粘贴进来…"
+                            else "把你想说的话写进来…"
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp),
+                    shape = RoundedCornerShape(20.dp),
                 )
-            },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp),
-            shape = RoundedCornerShape(20.dp),
-        )
 
-        Text("想怎样表达？", style = MaterialTheme.typography.titleSmall)
-        MovaChipRow(
-            options = ChatViewModel.STYLES,
-            selected = state.style,
-            onSelect = vm::setStyle,
-        )
+                com.mova.sceneai.ui.components.TaskStep("2", "选择表达的方式")
+                MovaChipRow(
+                    options = ChatViewModel.STYLES,
+                    selected = state.style,
+                    onSelect = vm::setStyle,
+                )
 
-        if (state.mode == ChatMode.REPLY) {
-            Text("这次，你想达到什么目标？", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "明确选择会优先采用；你可以随时改变主意",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            MovaChipRow(
-                options = ChatViewModel.GOALS,
-                selected = state.goal,
-                onSelect = vm::setGoal,
-            )
+                if (state.mode == ChatMode.REPLY) {
+                    Text("这次，你想达到什么目标？", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "明确选择会优先采用；你可以随时改变主意",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    MovaChipRow(
+                        options = ChatViewModel.GOALS,
+                        selected = state.goal,
+                        onSelect = vm::setGoal,
+                    )
+                }
+            }
         }
 
         // ---------- 多轮上下文（可展开） ----------

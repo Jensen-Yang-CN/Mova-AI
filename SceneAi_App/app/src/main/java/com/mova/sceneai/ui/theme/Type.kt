@@ -3,9 +3,13 @@ package com.mova.sceneai.ui.theme
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
+import com.mova.sceneai.R
 
 /**
  * 排版规范。
@@ -18,13 +22,22 @@ private val TrimStyle = LineHeightStyle(
     trim = LineHeightStyle.Trim.None,
 )
 
+/** 固定使用开源无衬线中文字体，避免手机主题字体改变比赛演示中的版式。 */
+@OptIn(ExperimentalTextApi::class)
+private val MovaSans = FontFamily(
+    Font(R.font.mova_sans_sc, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.mova_sans_sc, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.mova_sans_sc, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.mova_sans_sc, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+)
+
 private fun base(
     size: Int,
     lineHeight: Int,
     weight: FontWeight = FontWeight.Normal,
     letterSpacing: Double = 0.0,
 ) = TextStyle(
-    fontFamily = FontFamily.Default,
+    fontFamily = MovaSans,
     fontWeight = weight,
     fontSize = size.sp,
     lineHeight = lineHeight.sp,

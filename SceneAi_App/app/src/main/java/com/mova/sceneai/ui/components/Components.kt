@@ -76,7 +76,7 @@ fun MovaCard(
     contentPadding: Int = 16,
     content: @Composable () -> Unit,
 ) {
-    val shape = RoundedCornerShape(26.dp)
+    val shape = RoundedCornerShape(22.dp)
     val colors = CardDefaults.cardColors(containerColor = containerColor)
     val elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
 
@@ -160,6 +160,7 @@ fun MovaChipRow(
             FilterChip(
                 selected = option == selected,
                 onClick = { onSelect(option) },
+                shape = RoundedCornerShape(12.dp),
                 label = { Text(option) },
                 leadingIcon = if (option == selected) {
                     { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }

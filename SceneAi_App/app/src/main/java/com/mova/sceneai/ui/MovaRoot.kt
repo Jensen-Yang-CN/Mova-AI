@@ -102,7 +102,7 @@ fun MovaRoot() {
                     if (currentTab != null) {
                         Box(Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
                         NavigationBar(
-                            modifier = Modifier.clip(RoundedCornerShape(26.dp)).border(.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = .15f), RoundedCornerShape(26.dp)),
+                            modifier = Modifier.height(70.dp).clip(RoundedCornerShape(23.dp)).border(.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = .15f), RoundedCornerShape(23.dp)),
                             containerColor = MaterialTheme.colorScheme.surfaceContainer,
                             tonalElevation = 0.dp,
                             windowInsets = WindowInsets(0, 0, 0, 0),
@@ -120,8 +120,11 @@ fun MovaRoot() {
                                         }
                                     },
                                     icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                    label = { Text(tab.label) },
-                                    colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer),
+                                    label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.onSurface),
                                 )
                             }
                         }

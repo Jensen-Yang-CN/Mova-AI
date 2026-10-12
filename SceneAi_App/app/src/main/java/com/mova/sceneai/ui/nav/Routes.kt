@@ -1,10 +1,10 @@
 package com.mova.sceneai.ui.nav
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
 object Routes {
@@ -35,10 +35,10 @@ enum class MainTab(
     val label: String,
     val icon: ImageVector,
 ) {
-    HOME(Routes.HOME, "此刻", Icons.Filled.Home),
-    HISTORY(Routes.HISTORY, "回看", Icons.Filled.History),
-    TECH(Routes.TECH, "运行", Icons.Filled.Insights),
-    SETTINGS(Routes.SETTINGS, "设置", Icons.Filled.Settings);
+    HOME(Routes.HOME, "此刻", Icons.Outlined.Home),
+    HISTORY(Routes.HISTORY, "回看", Icons.Outlined.History),
+    TECH(Routes.TECH, "运行", Icons.Outlined.Insights),
+    SETTINGS(Routes.SETTINGS, "设置", Icons.Outlined.Settings);
 
     companion object {
         val routes: Set<String> = entries.map { it.route }.toSet()

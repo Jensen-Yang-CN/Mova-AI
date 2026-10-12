@@ -40,6 +40,9 @@ fun CityScreen(onBack: () -> Unit) {
     var longitude by rememberSaveable { mutableStateOf("114.30") }
     var latitude by rememberSaveable { mutableStateOf("30.60") }
     var coordsys by rememberSaveable { mutableStateOf("高德 GCJ-02") }
+    var experience by rememberSaveable { mutableStateOf("出行提醒") }
+    var manualOpen by rememberSaveable { mutableStateOf(false) }
+    var eventsOpen by rememberSaveable { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf("") }
     val destination = when (reminder) { "仅岳阳" -> "430600"; "仅武汉" -> "420100"; else -> "" }
 
@@ -70,12 +73,16 @@ fun CityScreen(onBack: () -> Unit) {
     }
 
     MovaScreen("城市初见", subtitle = "初到一座城，也有一份照应", onBack = onBack) {
-        StoryIntro("04", "陌生的城市，先说一声欢迎", "开启这次出行，城市变化确认后送来一张小指南。先认识本地味道，再决定去哪里走走。")
-        SectionHeader("这次怎样提醒")
+        StoryIntro("04", "每一次抵达，\n都有新的开始。", "开启一次出行，城市变化确认后送来一张小指南。先认识本地味道，再决定去哪里走走。")
+        MovaCard(contentPadding = 18) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        TaskStep("1", "这次怎样提醒")
         MovaChipRow(listOf("沿途城市", "仅岳阳", "仅武汉"), reminder, { reminder = it })
         Text("进入城市不等于列车到站。每趟同城只提醒一次；首个城市作为出发基线。", style = MaterialTheme.typography.bodySmall)
+        }
+        }
 
-        MovaCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+        MovaCard(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f)) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(when {
                     state.resolving -> "正在处理点位"
@@ -94,24 +101,32 @@ fun CityScreen(onBack: () -> Unit) {
             }
         }
 
-        SectionHeader("原地体验 · 模拟行程", "不需要坐车，也不需要修改手机系统位置")
+        MovaChipRow(listOf("出行提醒", "原地体验"), experience, { experience = it })
+        if (experience == "原地体验") {
+        SectionHeader("在这里，体验一次抵达", "不需要坐车，也不修改系统位置")
         MovaCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("武汉 → 岳阳", style = MaterialTheme.typography.titleLarge)
                 Text("播放公开城市点位，经高德真实解析后触发模拟欢迎通知。时间经过压缩，点位不代表真实铁路轨迹。", style = MaterialTheme.typography.bodySmall)
                 SolidActionButton(if (state.replaying) "模拟回放中…" else "播放模拟行程", enabled = !state.active,
-                    onClick = { start("mock") })
+                    modifier = Modifier.fillMaxWidth(), onClick = { start("mock") })
             }
         }
+        } else {
 
         SectionHeader("真实出行", "仅在你开启的这次出行中定位")
         MovaCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("运行时有持续通知与停止入口。城市解析会向所配置的服务及高德发送坐标；不保存完整轨迹。", style = MaterialTheme.typography.bodySmall)
-                OutlinedActionButton("开始真实出行", enabled = !state.active, onClick = { start("real") })
+                SolidActionButton("开始真实出行", modifier = Modifier.fillMaxWidth(), enabled = !state.active, onClick = { start("real") })
             }
         }
+        }
 
+        TextButton(onClick = { manualOpen = !manualOpen }) {
+            Text(if (manualOpen) "收起手动模拟经纬度" else "手动模拟经纬度 →")
+        }
+        if (manualOpen) {
         SectionHeader("手动模拟经纬度", "默认是武汉公共示例点，不是你的当前位置")
         MovaCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -137,6 +152,7 @@ fun CityScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall)
             }
         }
+        }
 
         if (state.arrivals.isNotEmpty()) {
             SectionHeader("收到的城市照应", "保存在本机，模拟记录有独立标记")
@@ -144,10 +160,13 @@ fun CityScreen(onBack: () -> Unit) {
                 state.guideErrors[it.guide.code]) { trip.refreshGuide(it.guide.code, it.guide.name) } }
         }
         if (state.events.isNotEmpty()) {
+            TextButton(onClick = { eventsOpen = !eventsOpen }) { Text(if (eventsOpen) "收起识别过程" else "查看本次识别过程") }
+            if (eventsOpen) {
             SectionHeader("本次识别过程")
             MovaCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.events.take(8).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
             } }
+            }
         }
     }
 }
@@ -168,7 +187,7 @@ private fun CityArrivalCard(entry: CityArrival, refreshing: Boolean, error: Stri
         val query = URLEncoder.encode(guide.name + " " + term, "UTF-8")
         open("https://uri.amap.com/search?keyword=$query&city=${guide.code}&src=mova&callnative=0")
     }
-    MovaCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+    MovaCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (entry.simulated) "模拟行程 · 城市卡片" else "真实出行 · 城市卡片", style = MaterialTheme.typography.labelSmall)
             Text("欢迎来到${guide.name}", style = MaterialTheme.typography.headlineSmall)

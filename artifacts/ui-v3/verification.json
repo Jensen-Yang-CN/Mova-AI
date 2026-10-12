@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-12",
+  "device_model": "OPPO Find X7 Ultra",
+  "android_build": "success",
+  "apk_installed": true,
+  "screen_review": ["home", "chat", "reading", "food", "city", "runtime"],
+  "checked_interactions": ["chat_reply_rewrite_switch", "reading_pdf_tab", "runtime_details_expand"],
+  "chat_sample": {
+    "completed": true,
+    "reply_body_visible": true,
+    "copy_action_visible": true,
+    "runtime_recorded": true,
+    "ui_total_seconds": 11.32,
+    "ui_edge_decision_seconds": 9.39,
+    "scope": "One built-in demonstration example, not a performance benchmark."
+  },
+  "home_dark_mode_checked": true,
+  "original_theme_restored": true,
+  "assets": {
+    "backgrounds": "Built-in image_gen; two original assets; prompts in docs/16.",
+    "decorations": "Compose Canvas",
+    "font": "Noto Sans SC; SIL OFL license included"
+  },
+  "privacy": "No API keys, private service IPs, device serial numbers, location tracks or real user conversations."
+}

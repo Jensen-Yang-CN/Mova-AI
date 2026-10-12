@@ -68,85 +68,85 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
     )
 
     MovaScreen(title = "读懂一页", subtitle = "把长材料，变成清楚的下一步", onBack = onBack) {
-        com.mova.sceneai.ui.components.StoryIntro("02", "先抓住重点，再做决定", "带来一段文字、截图或 PDF。先看摘要与要点，关键事项回到原文核对。")
+        com.mova.sceneai.ui.components.StoryIntro("02", "把复杂的内容，\n读成清楚的思路。", "文字、截图或 PDF，都能从这里开始。关键事项记得回到原文核对。")
 
-        TabRow(selectedTabIndex = tab) {
-            listOf("粘贴文本", "截图识别", "PDF 文档").forEachIndexed { index, label ->
-                Tab(
-                    selected = tab == index,
-                    onClick = { tab = index },
-                    text = { Text(label) },
-                )
-            }
-        }
+        MovaCard(contentPadding = 18) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                com.mova.sceneai.ui.components.TaskStep("1", "选择内容来源")
 
-        when (tab) {
-            0 -> Column {
-                OutlinedTextField(
-                    value = state.text,
-                    onValueChange = vm::onTextChange,
-                    label = { Text("粘贴要总结的内容") },
-                    placeholder = { Text("把文章、通知、会议纪要粘贴进来…") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 160.dp),
-                    supportingText = {
-                        Text("${state.text.length} 字", style = MaterialTheme.typography.bodySmall)
-                    },
-                )
-                Spacer(Modifier.height(10.dp))
-                SolidActionButton(
-                    text = "生成总结",
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = state.text.isNotBlank() && !state.load.isLoading,
-                ) { vm.summarizeText() }
-                Spacer(Modifier.height(8.dp))
-                OutlinedActionButton(
-                    text = "试试示例",
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = Icons.Filled.AutoAwesome,
-                ) { vm.useTextSample() }
-            }
+                com.mova.sceneai.ui.components.MovaSegmentedTabs(
+                    listOf("粘贴文本", "截图识别", "PDF 文档"), tab, { tab = it })
 
-            1 -> MovaCard {
-                Column {
-                    Text("拍一张文章截图", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "适合网页、App 里的文章与长通知。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    SolidActionButton(
-                        text = "拍照识别",
-                        icon = Icons.Filled.PhotoCamera,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { capture.capturePhoto() }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedActionButton(
-                        text = "从相册选择",
-                        icon = Icons.Filled.PhotoLibrary,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { capture.pickFromGallery() }
-                }
-            }
+                when (tab) {
+                    0 -> Column {
+                        OutlinedTextField(
+                            value = state.text,
+                            onValueChange = vm::onTextChange,
+                            label = { Text("粘贴要总结的内容") },
+                            placeholder = { Text("把文章、通知、会议纪要粘贴进来…") },
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(17.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 160.dp),
+                            supportingText = {
+                                Text("${state.text.length} 字", style = MaterialTheme.typography.bodySmall)
+                            },
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        SolidActionButton(
+                            text = "生成总结",
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = state.text.isNotBlank() && !state.load.isLoading,
+                        ) { vm.summarizeText() }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedActionButton(
+                            text = "试试示例",
+                            modifier = Modifier.fillMaxWidth(),
+                            icon = Icons.Filled.AutoAwesome,
+                        ) { vm.useTextSample() }
+                    }
 
-            else -> MovaCard {
-                Column {
-                    Text("选择一个 PDF 文件", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "当前只解析文档前几页，适合论文摘要、通知、说明书这类前部就有关键信息的文档。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    SolidActionButton(
-                        text = "选择 PDF",
-                        icon = Icons.Filled.PictureAsPdf,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { capture.pickPdf() }
+                    1 -> MovaCard {
+                        Column {
+                            Text("拍一张文章截图", style = MaterialTheme.typography.titleSmall)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "适合网页、App 里的文章与长通知。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            SolidActionButton(
+                                text = "拍照识别",
+                                icon = Icons.Filled.PhotoCamera,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { capture.capturePhoto() }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedActionButton(
+                                text = "从相册选择",
+                                icon = Icons.Filled.PhotoLibrary,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { capture.pickFromGallery() }
+                        }
+                    }
+
+                    else -> MovaCard {
+                        Column {
+                            Text("选择一个 PDF 文件", style = MaterialTheme.typography.titleSmall)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "当前只解析文档前几页，适合论文摘要、通知、说明书这类前部就有关键信息的文档。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            SolidActionButton(
+                                text = "选择 PDF",
+                                icon = Icons.Filled.PictureAsPdf,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { capture.pickPdf() }
+                        }
+                    }
                 }
             }
         }

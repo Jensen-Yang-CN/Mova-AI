@@ -1,6 +1,22 @@
 package com.mova.sceneai.ui.tech
 
 import android.content.Intent
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import com.mova.sceneai.ui.components.Dot
+import com.mova.sceneai.ui.components.MovaInk
+import com.mova.sceneai.ui.components.MovaMint
+import com.mova.sceneai.ui.components.MovaPeach
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,86 +79,143 @@ fun TechPanelScreen(onOpenSettings: () -> Unit) {
     val traces by container.repository.traces.collectAsStateWithLifecycle()
     val edge by container.repository.edgeState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
     val stats = remember(traces) { computeStats(traces) }
     val latest = traces.firstOrNull { it.success }
+    var detailsOpen by rememberSaveable { mutableStateOf(false) }
+    var tryoutOpen by rememberSaveable { mutableStateOf(false) }
+    var allRequests by rememberSaveable { mutableStateOf(false) }
 
-    MovaScreen(title = "运行证据", subtitle = "每一次判断，都有迹可循") {
-
-        InfoBanner(
-            text = "这里记录真实的模型状态和端云路由。端侧判断和云端正文生成分别计时；" +
-                "只有用户结果由端侧完成时才计入“端侧完成”。",
-        )
-
-        MovaCard {
-            Column {
-                Text("本次会话", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(8.dp))
-                KeyValueRow("总请求数", "${stats.total}")
-                KeyValueRow("端侧完成", "${stats.edgeCount}", valueColor = LocalMovaSemanticColors.current.edge)
-                KeyValueRow("云端完成", "${stats.cloudCount}", valueColor = LocalMovaSemanticColors.current.cloud)
-                KeyValueRow("请求失败", "${stats.failureCount}")
-                KeyValueRow("云端调用占比", Fmt.percent(stats.cloudRatio))
-                KeyValueRow("成功请求平均耗时", Fmt.duration(stats.avgMs?.toLong()))
+    MovaScreen(title = "运行与技术", subtitle = "看见照应背后的每一步") {
+        RuntimeHero(edge)
+        MovaCard(contentPadding = 18) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("一条回复，怎样来到你面前", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PipelineStep("01", "手机理解", "场景 / 意图", Modifier.weight(1f))
+                    PipelineStep("02", "云端组织", "候选 / 解释", Modifier.weight(1f))
+                    PipelineStep("03", "由你决定", "选择 / 修改", Modifier.weight(1f))
+                }
+                Text("这是沟通辅助的协作路径。端侧先理解需求，回复正文由云端生成。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
-        EdgeModelCard(edge = edge, onOpenSettings = onOpenSettings)
-
-        EdgeTryout(edge = edge, inspect = container.repository::inspectEdge)
-
+        SectionHeader("本机已记录的请求", "来自实际调用；不是模型评测准确率")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            RuntimeMetric(stats.total.toString(), "请求总数", Modifier.weight(1f))
+            RuntimeMetric(stats.cloudCount.toString(), "云端完成", Modifier.weight(1f))
+            RuntimeMetric(Fmt.duration(stats.avgMs?.toLong()), "成功平均耗时", Modifier.weight(1f))
+        }
         if (latest != null && latest.stages.isNotEmpty()) {
             MovaCard {
-                Column {
-                    Text("最近一次延迟拆解", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("最近一次 · 耗时拆解", style = MaterialTheme.typography.titleSmall)
                     val total = latest.stages.values.sum().coerceAtLeast(1L)
                     latest.stages.forEach { (stage, ms) ->
-                        MeterRow(
-                            label = stageLabel(stage),
-                            value = ms,
-                            total = total,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        MeterRow(stageLabel(stage), ms, total, MaterialTheme.colorScheme.primary)
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "端到端 ${Fmt.duration(latest.totalMs)}（含网络往返）",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text("端到端 " + Fmt.duration(latest.totalMs) + " · 含网络往返",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
-
-        SectionHeader("最近的请求", "每一行的「路由原因」都来自实际的决策函数，不是装饰文案")
-
-        if (traces.isEmpty()) {
-            EmptyState(
-                emoji = "📊",
-                title = "还没有数据",
-                desc = "用过任意一个功能之后，这里会开始记录每次请求的执行方式、耗时与路由原因。",
-            )
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                traces.take(30).forEach { TraceRow(it) }
+        // 参数属于可展开的证据层，普通用户先看到用途和真实状态。
+        MovaCard(contentPadding = 18) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("模型与统计详情", style = MaterialTheme.typography.titleSmall)
+                        Text("量化、结果来源与统计口径", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { detailsOpen = !detailsOpen }) { Text(if (detailsOpen) "收起" else "展开") }
+                }
+                if (detailsOpen) {
+                    KeyValueRow("端侧完成", stats.edgeCount.toString())
+                    KeyValueRow("请求失败", stats.failureCount.toString())
+                    KeyValueRow("云端调用占比", Fmt.percent(stats.cloudRatio))
+                    Text("只有完整用户结果由端侧完成，才计入「端侧完成」。端侧预判不计作离线生成。",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
-
-        Spacer(Modifier.height(8.dp))
-        OutlinedActionButton(
-            text = "导出日志",
-            icon = Icons.Filled.Share,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            val payload = buildLog(stats, edge, traces)
+        if (detailsOpen) EdgeModelCard(edge, onOpenSettings)
+        MovaCard(contentPadding = 18) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("试一次本机理解", style = MaterialTheme.typography.titleSmall)
+                    Text("直接验证量化模型，无需云端", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = { tryoutOpen = !tryoutOpen }) { Text(if (tryoutOpen) "收起" else "打开") }
+            }
+        }
+        if (tryoutOpen) EdgeTryout(edge, container.repository::inspectEdge)
+        SectionHeader("最近的请求", "执行方式、耗时与实际路由原因")
+        if (traces.isEmpty()) {
+            EmptyState("📊", "还没有运行记录", "完成一次功能调用后，这里会显示它的实际执行过程。")
+        } else {
+            traces.take(if (allRequests) 30 else 5).forEach { TraceRow(it) }
+            if (traces.size > 5) TextButton(onClick = { allRequests = !allRequests }) {
+                Text(if (allRequests) "收起较早记录" else "查看更多记录")
+            }
+        }
+        OutlinedActionButton("导出运行日志", Modifier.fillMaxWidth(), Icons.Filled.Share) {
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_SUBJECT, "Mova-AI 运行日志")
-                putExtra(Intent.EXTRA_TEXT, payload)
+                putExtra(Intent.EXTRA_TEXT, buildLog(stats, edge, traces))
             }
             context.startActivity(Intent.createChooser(intent, "导出日志"))
         }
+    }
+}
+
+/** 状态使用实际模型连接值；背景线路为装饰，不播放虚构的推理动画。 */
+@Composable
+private fun RuntimeHero(edge: EdgeRuntimeState) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
+        .background(Brush.linearGradient(listOf(MovaInk, Color(0xFF28535A))))) {
+        Canvas(Modifier.matchParentSize()) {
+            repeat(5) { row ->
+                val y = size.height * (.18f + row * .17f)
+                drawLine(Color.White.copy(.07f), Offset(size.width * .55f, y), Offset(size.width, y), 1.dp.toPx())
+                drawCircle(MovaMint.copy(.30f), 3.dp.toPx(), Offset(size.width * (.68f + (row % 2) * .18f), y))
+            }
+        }
+        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Dot(if (edge.ready) MovaMint else MovaPeach, 6)
+                Text(if (edge.ready) "ON DEVICE / 本机模型已就绪" else "ON DEVICE / 等待导入模型",
+                    style = MaterialTheme.typography.labelSmall, color = MovaMint)
+            }
+            Text("理解过程，\n可以被看见。", style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold, color = Color.White)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(edge.quantization ?: "GGUF", Modifier.background(Color.White.copy(.10f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 9.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                Text("端云协同", Modifier.background(Color.White.copy(.10f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 9.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PipelineStep(number: String, title: String, detail: String, modifier: Modifier) {
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primaryContainer.copy(.55f))
+        .padding(horizontal = 10.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(number, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun RuntimeMetric(value: String, label: String, modifier: Modifier) {
+    Column(modifier.clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
+        .padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(value, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -328,7 +401,7 @@ private fun buildLog(
     appendLine("模型：${edge.name ?: "未配置"}")
     appendLine("量化：${edge.quantization ?: "—"}")
     appendLine()
-    appendLine("== 会话统计 ==")
+    appendLine("== 本机已记录请求统计 ==")
     appendLine("总请求 ${stats.total} / 端侧 ${stats.edgeCount} / 云端 ${stats.cloudCount} / 失败 ${stats.failureCount}")
     appendLine("云端调用占比 ${Fmt.percent(stats.cloudRatio)}")
     appendLine("平均耗时 ${Fmt.duration(stats.avgMs?.toLong())}")

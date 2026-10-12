@@ -18,9 +18,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-val MovaInk = Color(0xFF172D2C)
-val MovaPeach = Color(0xFFFFC8A8)
-val MovaMint = Color(0xFFB8DCC9)
+val MovaInk = Color(0xFF102D35)
+val MovaPeach = Color(0xFFF1B899)
+val MovaMint = Color(0xFFB9DFD5)
 
 /** 自绘品牌光球：没有外部图片依赖，适配不同屏幕，也便于披露原创视觉工作。 */
 @Composable
@@ -46,12 +46,5 @@ fun MovaOrb(modifier: Modifier = Modifier) {
 /** 场景页的叙事入口。只说明用户要完成的动作，不展示模型参数。 */
 @Composable
 fun StoryIntro(index: String, title: String, description: String) {
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = .5f), RoundedCornerShape(24.dp)).padding(20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(index, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(6.dp))
-            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
+    SceneIntro(index, title, description)
 }

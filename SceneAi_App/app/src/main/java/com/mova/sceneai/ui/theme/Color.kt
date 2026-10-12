@@ -4,59 +4,59 @@ import androidx.compose.ui.graphics.Color
 
 // ============================================================
 // Mova-AI 调色板
-// 「照应」使用暖纸白、陶土橙与深墨绿；颜色服务于日常场景和清晰行动。
+// 「照应」使用珍珠白、深海青与暖珊瑚。大面积保持克制，色彩聚焦主要行动。
 //   成功 = 绿   降级/提示 = 橙   错误 = 红   端侧 = 蓝
 // ============================================================
 
 // ---------- Light ----------
-val MovaPrimaryLight = Color(0xFFAE4E32)
+val MovaPrimaryLight = Color(0xFF195A63)
 val MovaOnPrimaryLight = Color(0xFFFFFFFF)
-val MovaPrimaryContainerLight = Color(0xFFFCE4D6)
-val MovaOnPrimaryContainerLight = Color(0xFF4A251C)
+val MovaPrimaryContainerLight = Color(0xFFDCEDEA)
+val MovaOnPrimaryContainerLight = Color(0xFF123A40)
 
-val MovaSecondaryLight = Color(0xFF42635B)
+val MovaSecondaryLight = Color(0xFFAD573E)
 val MovaOnSecondaryLight = Color(0xFFFFFFFF)
-val MovaSecondaryContainerLight = Color(0xFFE0EDE4)
-val MovaOnSecondaryContainerLight = Color(0xFF183C32)
+val MovaSecondaryContainerLight = Color(0xFFF9E5DA)
+val MovaOnSecondaryContainerLight = Color(0xFF59301F)
 
 val MovaTertiaryLight = Color(0xFF00696E)
 val MovaTertiaryContainerLight = Color(0xFF9CF1F7)
 
-val MovaSurfaceLight = Color(0xFFF6F4EE)
-val MovaOnSurfaceLight = Color(0xFF20322F)
-val MovaSurfaceVariantLight = Color(0xFFE9E7DF)
-val MovaOnSurfaceVariantLight = Color(0xFF67746E)
-val MovaOutlineLight = Color(0xFF87928B)
+val MovaSurfaceLight = Color(0xFFF1F5F4)
+val MovaOnSurfaceLight = Color(0xFF163239)
+val MovaSurfaceVariantLight = Color(0xFFE5ECEA)
+val MovaOnSurfaceVariantLight = Color(0xFF5C7478)
+val MovaOutlineLight = Color(0xFF80989B)
 
-val MovaSurfaceContainerLight = Color(0xFFFFFEFA)
-val MovaSurfaceContainerHighLight = Color(0xFFEEECE4)
+val MovaSurfaceContainerLight = Color(0xFFFCFEFD)
+val MovaSurfaceContainerHighLight = Color(0xFFE9F0EE)
 
 val MovaErrorLight = Color(0xFFBA1A1A)
 val MovaOnErrorLight = Color(0xFFFFFFFF)
 val MovaErrorContainerLight = Color(0xFFFFDAD6)
 
 // ---------- Dark ----------
-val MovaPrimaryDark = Color(0xFFFFB392)
-val MovaOnPrimaryDark = Color(0xFF522D22)
-val MovaPrimaryContainerDark = Color(0xFF5E3A2D)
-val MovaOnPrimaryContainerDark = Color(0xFFFFE0CF)
+val MovaPrimaryDark = Color(0xFFABDAD8)
+val MovaOnPrimaryDark = Color(0xFF123A40)
+val MovaPrimaryContainerDark = Color(0xFF224A51)
+val MovaOnPrimaryContainerDark = Color(0xFFD8EEEA)
 
-val MovaSecondaryDark = Color(0xFFB4D2C3)
-val MovaOnSecondaryDark = Color(0xFF253F35)
-val MovaSecondaryContainerDark = Color(0xFF304B40)
-val MovaOnSecondaryContainerDark = Color(0xFFE1EEE5)
+val MovaSecondaryDark = Color(0xFFFFBEA6)
+val MovaOnSecondaryDark = Color(0xFF59301F)
+val MovaSecondaryContainerDark = Color(0xFF593E32)
+val MovaOnSecondaryContainerDark = Color(0xFFFFDFCF)
 
 val MovaTertiaryDark = Color(0xFF80D4DA)
 val MovaTertiaryContainerDark = Color(0xFF004F53)
 
-val MovaSurfaceDark = Color(0xFF111D1C)
+val MovaSurfaceDark = Color(0xFF10252B)
 val MovaOnSurfaceDark = Color(0xFFE5EAE4)
 val MovaSurfaceVariantDark = Color(0xFF3C4942)
 val MovaOnSurfaceVariantDark = Color(0xFFB5C0B9)
 val MovaOutlineDark = Color(0xFF819089)
 
-val MovaSurfaceContainerDark = Color(0xFF1A2A27)
-val MovaSurfaceContainerHighDark = Color(0xFF243631)
+val MovaSurfaceContainerDark = Color(0xFF183239)
+val MovaSurfaceContainerHighDark = Color(0xFF24424A)
 
 val MovaErrorDark = Color(0xFFFFB4AB)
 val MovaOnErrorDark = Color(0xFF690005)
