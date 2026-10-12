@@ -72,7 +72,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
 
     LaunchedEffect(Unit) { vm.load() }
 
-    MovaScreen(title = "设置", subtitle = "连接、主动智能、端侧与外观") {
+    MovaScreen(title = "设置", subtitle = "连接、模型与外观") {
 
         // ---------- 服务连接 ----------
         SectionHeader("服务连接")
@@ -130,15 +130,15 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
         MovaCard {
             Column {
                 SwitchRow(
-                    title = "场景主动提醒",
-                    desc = "在合适的场景下主动提供帮助",
+                    title = "保存场景提醒偏好",
+                    desc = "实验设置；当前版本尚不自动触发提醒",
                     checked = state.proactiveEnabled,
                     onCheckedChange = vm::setProactive,
                 )
                 Spacer(Modifier.height(12.dp))
                 SwitchRow(
                     title = "免打扰时段",
-                    desc = "在这段时间内不主动出现",
+                    desc = "为后续提醒功能保存安静时段",
                     checked = state.dndEnabled,
                     onCheckedChange = vm::setDndEnabled,
                 )
