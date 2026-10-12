@@ -75,50 +75,29 @@ Android 短文本 ──> 端侧小模型 ──> 契约校验/槽位提取 ─�
 | 7 | 长内容不被截断 | 全面废弃 Toast，改为结构化结果卡 |
 | 8 | 高级能力不吓人 | 技术面板独立成一级入口，主流程零术语 |
 
-### 实机演示
+### 实机界面展示
 
-### 当前界面 · OPPO 真机
+以下展示当前版本在 OPPO Find X7 Ultra 上运行的实际界面。
 
-| 此刻 | 把话说好 | 运行与技术 |
+| 此刻 | 把话说好 | 读懂一页 |
 |---|---|---|
-| ![此刻](docs/assets/ui-v3/home.png) | ![把话说好](docs/assets/ui-v3/chat.png) | ![运行与技术](docs/assets/ui-v3/runtime.png) |
+| ![此刻](docs/assets/ui-v3/home.png) | ![把话说好](docs/assets/ui-v3/chat.png) | ![读懂一页](docs/assets/ui-v3/reading.png) |
 
-全部功能页、素材来源和设计说明见 [竞赛视觉升级](docs/16-竞赛视觉升级.md)。
+| 好好吃饭 | 城市初见 | 运行与技术 |
+|---|---|---|
+| ![好好吃饭](docs/assets/ui-v3/food.png) | ![城市初见](docs/assets/ui-v3/city.png) | ![运行与技术](docs/assets/ui-v3/runtime.png) |
 
-<details>
-<summary>历史演示与旧界面</summary>
+| 沟通结果 | 深色首页 |
+|---|---|
+| ![沟通结果](docs/assets/ui-v3/chat-result.png) | ![深色首页](docs/assets/ui-v3/home-dark.png) |
 
-以下动画属于改版前的历史演示，在 Android 36 模拟器上**真实操作**录制的（未剪辑加速，6 倍速播放）：
-首启向导 → 检测连接 → 首页 → 做饭（真实调用两级流水线）→ 阅读总结 → 聊天辅助 → 记录 → 技术面板 → 设置。
+截图来自真实 APK，端侧状态与调用记录由实际运行产生。截图中的耗时是单条示例结果，不代表跨设备性能基准。
 
-![Mova-AI 实机演示](docs/screenshots/demo.gif)
-
-### 历史界面画廊
-
-| 首启向导 | 首页 | 做饭 · 输入 | 做饭 · 结果 |
-|---|---|---|---|
-| ![首启向导](docs/screenshots/00-首启向导.png) | ![首页](docs/screenshots/01-首页.png) | ![做饭输入](docs/screenshots/02-做饭-输入.png) | ![做饭结果](docs/screenshots/03-做饭-结果.png) |
-
-| 阅读 · 输入 | 阅读 · 结果 | 聊天 · 输入 | 聊天 · 结果 |
-|---|---|---|---|
-| ![阅读输入](docs/screenshots/04-阅读-输入.png) | ![阅读结果](docs/screenshots/05-阅读-结果.png) | ![聊天输入](docs/screenshots/06-聊天-输入.png) | ![聊天结果](docs/screenshots/07-聊天-结果.png) |
-
-| 记录 | 技术面板 | 设置 | 关于 |
-|---|---|---|---|
-| ![记录](docs/screenshots/08-记录.png) | ![技术面板](docs/screenshots/09-技术面板.png) | ![设置](docs/screenshots/10-设置.png) | ![关于](docs/screenshots/11-关于.png) |
-
-> 所有截图与动画均来自模拟器真实运行，非设计稿。几个值得注意的细节：
-> - 技术面板的阶段耗时来自服务端 `meta.stages`；动画中的具体数值是录制时的单次运行结果，不是跨设备性能基准
-> - 旧版录制时端侧显示「未部署」；当前版已接入 GGUF，状态来自本机实际加载结果
-> - 位置提示卡片显示「规划中」，没有假装已实现
-
-</details>
+素材来源、设计说明与实机核查记录见 [竞赛视觉升级](docs/16-竞赛视觉升级.md)。
 
 ### 从微信分享进来（聊天辅助的接入方式）
 
-来源应用支持分享文字时，选择消息 → 分享 → Mova·照应。当前版只预填内容，用户选择语气和目标并确认后再生成。下图记录旧版分享入口，具体菜单由来源应用决定：
-
-![分享入口](docs/screenshots/12-分享入口.png)
+来源应用支持分享文字时，选择消息 → 分享 → Mova·照应。内容会填入当前「把话说好」页面，用户选择语气和目标并确认后再生成；具体分享菜单由来源应用决定。
 
 聊天输入采用 Android 系统分享入口：用户在来源应用中主动选择内容，再分享给 Mova-AI。
 另一种设计是通过 `AccessibilityService` 读取其它应用界面；它能减少手动操作，但需要更广泛的界面访问权限，也更依赖来源应用的 UI 结构。
