@@ -16,6 +16,10 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Url
+import retrofit2.http.Query
+import com.mova.sceneai.data.city.CityFixRequest
+import com.mova.sceneai.data.city.ResolvedCity
+import com.mova.sceneai.data.city.CityGuide
 
 /**
  * 云端服务接口。
@@ -25,6 +29,13 @@ import retrofit2.http.Url
  * 用 @Url 后全局只需要一个 Retrofit 实例。
  */
 interface MovaApi {
+
+    @POST
+    suspend fun resolveCity(@Url url: String, @Body body: CityFixRequest): ResolvedCity
+
+    @GET
+    suspend fun cityGuide(@Url url: String, @Query("city_code") code: String,
+                         @Query("city_name") name: String): CityGuide
 
     @GET
     suspend fun health(@Url url: String): HealthDto

@@ -517,9 +517,10 @@ fun OutlinedActionButton(
     text: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    OutlinedButton(onClick = onClick, modifier = modifier.height(50.dp), shape = RoundedCornerShape(17.dp)) {
+    OutlinedButton(onClick = onClick, modifier = modifier.height(50.dp), enabled = enabled, shape = RoundedCornerShape(17.dp)) {
         if (icon != null) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))

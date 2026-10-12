@@ -49,6 +49,13 @@ fun HomeScreen(onOpenScene: (String) -> Unit, onOpenSettings: () -> Unit, onOpen
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 20.dp))
     }) {
         HomeHero { onOpenScene(Routes.CHAT) }
+        MovaCard(onClick = { onOpenScene(Routes.CITY) }, contentPadding = 20) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("城市初见 · 一份旅途中的照应", style = MaterialTheme.typography.titleMedium)
+                Text("原地播放模拟行程，或开启本次真实出行 →", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         MovaCard(onClick = onOpenSettings, contentPadding = 15) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Readiness(if (state.edge.ready) "手机理解已就绪" else "端侧模型待导入", state.edge.ready, Modifier.weight(1f))

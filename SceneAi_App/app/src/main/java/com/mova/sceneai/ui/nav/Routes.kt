@@ -17,6 +17,8 @@ object Routes {
     const val HISTORY = "history"
     const val TECH = "tech"
     const val SETTINGS = "settings"
+    const val CITY = "city"
+    const val CITY_CARD = "city/card"
 
     /** 记录详情：用参数定位到具体一条历史 */
     const val RESULT_DETAIL = "result/{entryId}"

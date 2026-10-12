@@ -22,6 +22,7 @@ import time
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from typing import Literal
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +31,7 @@ from pydantic import BaseModel, Field
 from mova import prompts
 from mova.config import VERSION, ConfigError, load_settings
 from mova.providers import OpenAICompatProvider, ProviderError, extract_json
+from mova.cities import CityServiceError, resolve_city, city_guide
 
 logging.basicConfig(
     level=logging.INFO,
@@ -96,6 +98,28 @@ class ChatContextRequest(BaseModel):
     messages: list[ChatMessage]
     goal: str = ""
     style: str = "自然"
+
+
+class CityLocationRequest(BaseModel):
+    longitude: float = Field(ge=-180, le=180)
+    latitude: float = Field(ge=-90, le=90)
+    coordsys: Literal["wgs84", "gcj02"] = "wgs84"
+
+
+@app.post("/city/resolve", summary="将有效位置解析为城市")
+def resolve_city_endpoint(body: CityLocationRequest) -> dict:
+    """同步端点由 FastAPI 在线程池执行，不阻塞异步业务；不记录位置与 Key。"""
+    try:
+        return resolve_city(SETTINGS.amap_key, body.longitude, body.latitude, body.coordsys)
+    except CityServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+
+
+@app.get("/city/guide", summary="读取有来源的城市欢迎卡片")
+def city_guide_endpoint(city_code: str, city_name: str = "新城市") -> dict:
+    if len(city_code) != 6 or not city_code.isdigit() or len(city_name) > 40:
+        raise HTTPException(status_code=422, detail="城市标识不合法")
+    return city_guide(city_code, city_name)
 
 
 # ===============================================================
@@ -238,12 +262,12 @@ async def capabilities() -> dict[str, Any]:
             },
             {
                 "id": "location",
-                "name": "位置提示",
-                "desc": "到了超市提醒你",
+                "name": "城市初见",
+                "desc": "城市切换提醒 / 模拟行程",
                 "emoji": "📍",
-                "available": False,
+                "available": bool(SETTINGS.amap_key),
                 "edge_ready": False,
-                "unavailable_hint": "规划中",
+                "unavailable_hint": "需要配置地图服务" if not SETTINGS.amap_key else "",
             },
         ]
     }

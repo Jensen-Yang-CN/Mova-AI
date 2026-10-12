@@ -62,6 +62,7 @@ class Settings:
     max_upload_mb: int = 12
     max_pdf_pages: int = 3
     allow_origins: list[str] = field(default_factory=lambda: ["*"])
+    amap_key: str = ""
 
     @property
     def display_name(self) -> str:
@@ -115,4 +116,5 @@ def load_settings(env_file: Path | None = None) -> Settings:
         max_retries=int(os.environ.get("MOVA_MAX_RETRIES", "2")),
         max_upload_mb=int(os.environ.get("MOVA_MAX_UPLOAD_MB", "12")),
         max_pdf_pages=int(os.environ.get("MOVA_MAX_PDF_PAGES", "3")),
+        amap_key=os.environ.get("MOVA_AMAP_KEY", "").strip(),
     )

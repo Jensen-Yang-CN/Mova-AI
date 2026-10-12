@@ -13,6 +13,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.mova.sceneai.data.city.CityTripManager
 
 /**
  * 手写的依赖容器。
@@ -32,6 +34,9 @@ class AppContainer(context: Context) {
 
     /** 接收其它 App 分享过来的文字（微信长按消息 → 分享 → Mova-AI） */
     val sharedInbox = SharedInbox()
+    val openCity = MutableStateFlow(false)
+    val cityTrip = CityTripManager(appContext, settings,
+        ApiFactory.createApi(ApiFactory.createClient(), json), json)
 
     val repository = MovaRepository(
         context = appContext,

@@ -11,6 +11,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- 主动提醒（场景触发链路） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 用户显式开启一次出行；不申请全天后台位置或开机自启。 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -61,6 +66,9 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <service android:name=".data.city.CityLocationService"
+            android:exported="false" android:foregroundServiceType="location" />
 
         <!-- 全分辨率拍照输出（避免系统相机只回传缩略图） -->
         <provider

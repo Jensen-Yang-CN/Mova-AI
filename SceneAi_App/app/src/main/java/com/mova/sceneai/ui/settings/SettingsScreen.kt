@@ -126,7 +126,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
         }
 
         // ---------- 主动智能 ----------
-        SectionHeader("提醒偏好 · 实验功能", "当前版本以用户主动提交的内容为入口")
+        SectionHeader("免打扰与提醒偏好", "免打扰用于城市通知；自动触发偏好仍为实验设置")
         MovaCard {
             Column {
                 SwitchRow(
@@ -138,7 +138,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
                 SwitchRow(
                     title = "免打扰时段",
-                    desc = "为后续提醒功能保存安静时段",
+                    desc = "城市欢迎通知在此时段静音",
                     checked = state.dndEnabled,
                     onCheckedChange = vm::setDndEnabled,
                 )
@@ -183,7 +183,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "这些偏好目前仅保存在本机；位置与后台自动触发仍在规划中。",
+                    "城市初见需在首页开启本次出行；打扰敏感度仍为实验偏好，不会自动开启定位。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

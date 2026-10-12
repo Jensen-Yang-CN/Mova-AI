@@ -1,0 +1,186 @@
+package com.mova.sceneai.ui.city
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mova.sceneai.MovaApp
+import com.mova.sceneai.data.city.CityLocationService
+import com.mova.sceneai.data.city.CityArrival
+import com.mova.sceneai.ui.components.*
+import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.launch
+
+/**
+ * 同一页明确区分真实位置与 App 内模拟；模拟无需开发者选项，也不修改系统定位。
+ * Key 不进入客户端；位置解析交给用户配置的 FastAPI 服务转发高德。
+ */
+@Composable
+fun CityScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val trip = MovaApp.instance.container.cityTrip
+    val state by trip.state.collectAsStateWithLifecycle()
+    var reminder by rememberSaveable { mutableStateOf("沿途城市") }
+    var longitude by rememberSaveable { mutableStateOf("114.30") }
+    var latitude by rememberSaveable { mutableStateOf("30.60") }
+    var coordsys by rememberSaveable { mutableStateOf("高德 GCJ-02") }
+    var pendingStart by remember { mutableStateOf("") }
+    val destination = when (reminder) { "仅岳阳" -> "430600"; "仅武汉" -> "420100"; else -> "" }
+
+    fun executeStart(mode: String) {
+        context.stopService(Intent(context, CityLocationService::class.java))
+        if (mode == "mock") trip.simulateRoute(destination)
+        else try {
+            ContextCompat.startForegroundService(context,
+                Intent(context, CityLocationService::class.java).putExtra("destination", destination))
+        } catch (_: Exception) { trip.report("无法启动出行服务，请在页面可见时授权定位后重试") }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val mode = pendingStart
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (mode == "mock" || granted) executeStart(mode)
+        else trip.report("未授权定位；仍可使用模拟行程或手动经纬度")
+        pendingStart = ""
+    }
+    fun start(mode: String) {
+        pendingStart = mode
+        val permissions = buildList {
+            if (mode == "real") { add(Manifest.permission.ACCESS_COARSE_LOCATION); add(Manifest.permission.ACCESS_FINE_LOCATION) }
+            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        }.filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+        if (permissions.isEmpty()) { executeStart(mode); pendingStart = "" }
+        else permissionLauncher.launch(permissions.toTypedArray())
+    }
+
+    MovaScreen("城市初见", subtitle = "初到一座城，也有一份照应", onBack = onBack) {
+        StoryIntro("04", "陌生的城市，先说一声欢迎", "开启这次出行，城市变化确认后送来一张小指南。先认识本地味道，再决定去哪里走走。")
+        SectionHeader("这次怎样提醒")
+        MovaChipRow(listOf("沿途城市", "仅岳阳", "仅武汉"), reminder, { reminder = it })
+        Text("进入城市不等于列车到站。每趟同城只提醒一次；首个城市作为出发基线。", style = MaterialTheme.typography.bodySmall)
+
+        MovaCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(if (state.active) (if (state.simulated) "模拟行程运行中" else "真实出行运行中") else "本次出行状态",
+                    style = MaterialTheme.typography.titleMedium)
+                KeyValueRow("最近识别", state.currentCity)
+                Text(state.status, style = MaterialTheme.typography.bodyMedium)
+                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (state.active) OutlinedActionButton("结束本次出行", onClick = {
+                    context.stopService(Intent(context, CityLocationService::class.java)); trip.end()
+                })
+            }
+        }
+
+        SectionHeader("原地体验 · 模拟行程", "不需要坐车，也不需要修改手机系统位置")
+        MovaCard {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("武汉 → 岳阳", style = MaterialTheme.typography.titleLarge)
+                Text("播放公开城市点位，经高德真实解析后触发模拟欢迎通知。时间经过压缩，点位不代表真实铁路轨迹。", style = MaterialTheme.typography.bodySmall)
+                SolidActionButton(if (state.replaying) "模拟回放中…" else "播放模拟行程", enabled = !state.active,
+                    onClick = { start("mock") })
+            }
+        }
+
+        SectionHeader("真实出行", "仅在你开启的这次出行中定位")
+        MovaCard {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("运行时有持续通知与停止入口。城市解析会向所配置的服务及高德发送坐标；不保存完整轨迹。", style = MaterialTheme.typography.bodySmall)
+                OutlinedActionButton("开始真实出行", enabled = !state.active, onClick = { start("real") })
+            }
+        }
+
+        SectionHeader("手动模拟经纬度", "默认是武汉公共示例点，不是你的当前位置")
+        MovaCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(longitude, { longitude = it }, label = { Text("经度") }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(latitude, { latitude = it }, label = { Text("纬度") }, singleLine = true, modifier = Modifier.weight(1f))
+                }
+                MovaChipRow(listOf("高德 GCJ-02", "GPS WGS-84"), coordsys, { coordsys = it })
+                OutlinedActionButton("提交模拟点位", enabled = !state.active || (state.simulated && !state.replaying), onClick = {
+                    val lon = longitude.toDoubleOrNull(); val lat = latitude.toDoubleOrNull()
+                    if (lon == null || lat == null || !lon.isFinite() || !lat.isFinite() || lon !in -180.0..180.0 || lat !in -90.0..90.0) {
+                        trip.report("请输入有效经纬度，经度在前、纬度在后")
+                    } else trip.manualPoint(lon, lat, if (coordsys == "GPS WGS-84") "wgs84" else "gcj02", destination)
+                })
+                Text("建立武汉基线后，可输入岳阳示例 113.13 / 29.37，连续提交两次确认；每次推进一分钟模拟时间。", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        if (state.arrivals.isNotEmpty()) {
+            SectionHeader("收到的城市照应", "保存在本机，模拟记录有独立标记")
+            state.arrivals.take(5).forEach { CityArrivalCard(it) }
+        }
+        if (state.events.isNotEmpty()) {
+            SectionHeader("本次识别过程")
+            MovaCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.events.take(8).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            } }
+        }
+    }
+}
+
+@Composable
+private fun CityArrivalCard(entry: CityArrival) {
+    val guide = entry.guide
+    val uri = LocalUriHandler.current
+    val snackbar = LocalSnackbar.current
+    val scope = rememberCoroutineScope()
+    fun open(url: String) {
+        if (runCatching { uri.openUri(url) }.isFailure) {
+            scope.launch { snackbar.showSnackbar("没有可打开链接的地图或浏览器应用") }
+        }
+    }
+    fun search(term: String) {
+        // 仅在用户点击后打开地图页面；不自动开启导航，不发送用户当前位置。
+        val query = URLEncoder.encode(guide.name + " " + term, "UTF-8")
+        open("https://uri.amap.com/search?keyword=$query&city=${guide.code}&src=mova&callnative=0")
+    }
+    MovaCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(if (entry.simulated) "模拟行程 · 城市卡片" else "真实出行 · 城市卡片", style = MaterialTheme.typography.labelSmall)
+            Text("欢迎来到${guide.name}", style = MaterialTheme.typography.headlineSmall)
+            Text(guide.subtitle, style = MaterialTheme.typography.bodyMedium)
+            if (guide.foods.isNotEmpty()) {
+                Text("先认识本地味道", style = MaterialTheme.typography.titleSmall)
+                guide.foods.forEach { food -> OutlinedActionButton(food + " · 地图搜索", onClick = { search(food) }) }
+            }
+            if (guide.sights.isNotEmpty()) {
+                Text("可以去认识的地方", style = MaterialTheme.typography.titleSmall)
+                guide.sights.forEach { sight -> OutlinedActionButton(sight + " · 地图搜索", onClick = { search(sight) }) }
+            }
+            if (!guide.curated) OutlinedActionButton("在地图上认识这座城", onClick = { search("景点") })
+            Text(guide.notice, style = MaterialTheme.typography.bodySmall)
+            guide.sources.forEach { source -> TextButton(onClick = { open(source.url) }) { Text(source.title) } }
+            Text("资料更新 ${guide.updatedOn.ifBlank { "待更新" }} · 收到 " +
+                SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(entry.timestamp)), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+/** 通知点击后的专用页面，直接显示最新卡片，不要求用户先滚过出行设置。 */
+@Composable
+fun CityArrivalScreen(onBack: () -> Unit) {
+    val state by MovaApp.instance.container.cityTrip.state.collectAsStateWithLifecycle()
+    MovaScreen("一份城市照应", subtitle = "初到这里，慢慢认识", onBack = onBack) {
+        val entry = state.arrivals.firstOrNull()
+        if (entry == null) Text("尚未收到城市卡片，可以在首页开启一次出行或模拟行程。")
+        else CityArrivalCard(entry)
+    }
+}

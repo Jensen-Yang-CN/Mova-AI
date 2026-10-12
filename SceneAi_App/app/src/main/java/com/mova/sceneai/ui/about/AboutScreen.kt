@@ -34,7 +34,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 KeyValueRow("版本", BuildConfig.VERSION_NAME)
                 KeyValueRow("本机模型", edge.statusLabel)
                 KeyValueRow("模型体积", "约 397 MB · Q4_K_M")
-                KeyValueRow("主动位置触发", "后续规划")
+                KeyValueRow("城市初见", "支持出行与模拟模式")
                 Spacer(Modifier.height(12.dp))
                 Text("训练、评测、量化与 Android 接入过程可在项目仓库核对。离线分类可单独试运行，回复正文仍需要可用的模型服务。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

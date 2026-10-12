@@ -45,6 +45,8 @@ import com.mova.sceneai.R
 import com.mova.sceneai.core.ThemeMode
 import com.mova.sceneai.ui.about.AboutScreen
 import com.mova.sceneai.ui.chat.ChatScreen
+import com.mova.sceneai.ui.city.CityScreen
+import com.mova.sceneai.ui.city.CityArrivalScreen
 import com.mova.sceneai.ui.components.LocalSnackbar
 import com.mova.sceneai.ui.food.FoodScreen
 import com.mova.sceneai.ui.history.HistoryScreen
@@ -152,6 +154,13 @@ private fun MovaNavHost(
     //   ① 首启向导没走完就不跳转 —— 否则用户会被直接扔进聊天页，错过权限与连接配置
     //   ② 已经在聊天页时不重复导航 —— 避免分享一次叠一层页面
     val pendingShare by MovaApp.instance.container.sharedInbox.pending.collectAsStateWithLifecycle()
+    val openCity by MovaApp.instance.container.openCity.collectAsStateWithLifecycle()
+    LaunchedEffect(openCity, onboardingDone) {
+        if (openCity && onboardingDone) {
+            navController.navigate(Routes.CITY_CARD) { launchSingleTop = true }
+            MovaApp.instance.container.openCity.value = false
+        }
+    }
     LaunchedEffect(pendingShare, onboardingDone) {
         val onChat = navController.currentDestination?.route == Routes.CHAT
         if (pendingShare != null && onboardingDone && !onChat) {
@@ -185,6 +194,9 @@ private fun MovaNavHost(
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }
+
+        composable(Routes.CITY) { CityScreen(onBack = { navController.popBackStack() }) }
+        composable(Routes.CITY_CARD) { CityArrivalScreen(onBack = { navController.popBackStack() }) }
 
         composable(Routes.READING) {
             ReadingScreen(

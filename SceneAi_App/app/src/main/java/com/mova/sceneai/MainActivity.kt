@@ -45,6 +45,9 @@ class MainActivity : ComponentActivity() {
      */
     private fun receiveSharedText(intent: Intent?) {
         if (intent == null) return
+        if (intent.getBooleanExtra("open_city", false)) {
+            (application as MovaApp).container.openCity.value = true
+        }
 
         val shared: String? = when (intent.action) {
             // 有的 App 放 EXTRA_TEXT，有的只放 ClipData，两条都兜一下

@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-12",
+  "device": "OPPO Find X7 Ultra",
+  "android": "16",
+  "android_detector_tests": {"tests": 4, "failures": 0},
+  "server_boundary_tests": {"tests": 4, "failures": 0},
+  "map_calls": {
+    "wuhan_gcj02": "420100",
+    "yueyang_gcj02": "430600",
+    "wuhan_gps_conversion": "420100"
+  },
+  "simulated_trip": {
+    "input": "public city sample points; compressed logical time",
+    "resolved_cities": ["420100", "420100", "430600", "430600", "430600"],
+    "arrival_cards_created": 1,
+    "duplicate_final_city_alert": false,
+    "notification_title_seen": "模拟行程 · 欢迎来到岳阳市",
+    "notification_body_seen": true,
+    "notification_click_opens_city_card": true,
+    "card_persisted_locally": true
+  },
+  "scope": "App 内模拟，不修改系统定位；不是实际铁路轨迹，不是实测跨城延迟。真实跨城、长时后台及耗电未验证。公开记录不含地图 Key、用户精确位置、单位坐标或设备序列号。"
+}
