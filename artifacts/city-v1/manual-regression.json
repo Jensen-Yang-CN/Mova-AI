@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-12",
+  "device": "OPPO Find X7 Ultra",
+  "mode": "app_manual_simulation",
+  "invalid_point": {
+    "longitude": 128.3844,
+    "latitude": 36.0625,
+    "server_status": 503,
+    "failure_shown_beside_submit_button": true,
+    "loading_ended": true,
+    "retry_possible": true
+  },
+  "corrected_point": {
+    "longitude": 120.3844,
+    "latitude": 36.0625,
+    "coordsys": "gcj02",
+    "resolved_city_code": "370200",
+    "resolved_city_name": "青岛市",
+    "baseline_city_code": "420100",
+    "two_valid_new_city_submissions": true,
+    "notification_title_seen": "模拟行程 · 欢迎来到青岛市"
+  },
+  "scope": "公开地点的手动模拟点位，不是用户真实位置或铁路行程。未收录城市仍显示资料待补充，不生成事实。"
+}

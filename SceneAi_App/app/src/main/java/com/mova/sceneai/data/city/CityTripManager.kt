@@ -47,10 +47,12 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
     fun end() {
         simulationJob?.cancel()
         sessionId++
-        _state.value = _state.value.copy(active = false, replaying = false, status = "本次出行已结束")
+        _state.value = _state.value.copy(active = false, replaying = false, resolving = false, status = "本次出行已结束")
     }
 
-    fun report(message: String) { _state.value = _state.value.copy(error = message) }
+    fun report(message: String) {
+        _state.value = _state.value.copy(status = "本次操作未完成，请查看提示", error = message)
+    }
 
     /** 公共城市点位。它们是离散测试输入，既非用户当前位置，也非真实列车轨迹。 */
     fun simulateRoute(destination: String = "") {
@@ -73,10 +75,12 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
 
     /** 手动输入时每次按一分钟推进逻辑时间，同样要求连续两次新城市确认。 */
     fun manualPoint(longitude: Double, latitude: Double, coordsys: String, destination: String = "") {
-        if (state.value.replaying) return
+        // 一次手动提交只对应一次请求；禁止重复点击造成串行积压，误以为一直在加载。
+        if (state.value.replaying || state.value.resolving) return
         if (!state.value.active || !state.value.simulated) begin(true, destination)
         val logicalTime = mockClock
         mockClock += 60_000
+        _state.value = _state.value.copy(resolving = true, status = "正在识别这个点位…", error = null)
         scope.launch { submit(CityFixRequest(longitude, latitude, coordsys), logicalTime) }
     }
 
@@ -84,6 +88,7 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
         val currentSession = sessionId
         mutex.withLock {
             if (!state.value.active || currentSession != sessionId) return
+            _state.value = _state.value.copy(resolving = true, status = "正在识别城市（最多 25 秒）…", error = null)
             try {
                 val config = settings.current()
                 val city = withTimeout(25_000) { api.resolveCity(config.endpoint("city/resolve"), fix) }
@@ -92,6 +97,7 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
                 _state.value = _state.value.copy(currentCity = city.name, status = result.status, error = null,
                     events = (listOf("${city.name} · ${result.status}") + _state.value.events).take(20))
                 if (!result.entered) return
+                _state.value = _state.value.copy(status = "已确认新城市，正在读取介绍…")
                 // 城市确认不依赖介绍接口成功；介绍失败也保留到达卡片，不丢掉事件。
                 val guide = try {
                     withTimeout(15_000) { api.cityGuide(config.endpoint("city/guide"), city.code, city.name) }
@@ -118,6 +124,9 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
                     runCatching { JSONObject(e.response()?.errorBody()?.string() ?: "{}").optString("detail") }
                         .getOrDefault("").ifBlank { "城市服务返回 ${e.code()}，请检查连接与配置" }
                 } else "暂时无法识别城市，请检查服务连接后重试")
+            } finally {
+                // 失败、超时、候选城市及成功通知都必须结束本次加载；行程仍可继续。
+                if (currentSession == sessionId) _state.value = _state.value.copy(resolving = false)
             }
         }
     }

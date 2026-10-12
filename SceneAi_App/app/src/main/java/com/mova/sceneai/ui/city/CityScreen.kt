@@ -76,7 +76,13 @@ fun CityScreen(onBack: () -> Unit) {
 
         MovaCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (state.active) (if (state.simulated) "模拟行程运行中" else "真实出行运行中") else "本次出行状态",
+                Text(when {
+                    state.resolving -> "正在处理点位"
+                    state.replaying -> "模拟行程回放中"
+                    state.active && state.simulated -> "手动模拟 · 等待下一次提交"
+                    state.active -> "真实出行运行中"
+                    else -> "本次出行状态"
+                },
                     style = MaterialTheme.typography.titleMedium)
                 KeyValueRow("最近识别", state.currentCity)
                 Text(state.status, style = MaterialTheme.typography.bodyMedium)
@@ -113,13 +119,21 @@ fun CityScreen(onBack: () -> Unit) {
                     OutlinedTextField(latitude, { latitude = it }, label = { Text("纬度") }, singleLine = true, modifier = Modifier.weight(1f))
                 }
                 MovaChipRow(listOf("高德 GCJ-02", "GPS WGS-84"), coordsys, { coordsys = it })
-                OutlinedActionButton("提交模拟点位", enabled = !state.active || (state.simulated && !state.replaying), onClick = {
+                OutlinedActionButton(if (state.resolving) "正在识别点位…" else "提交模拟点位",
+                    enabled = !state.resolving && (!state.active || (state.simulated && !state.replaying)), onClick = {
                     val lon = longitude.toDoubleOrNull(); val lat = latitude.toDoubleOrNull()
                     if (lon == null || lat == null || !lon.isFinite() || !lat.isFinite() || lon !in -180.0..180.0 || lat !in -90.0..90.0) {
                         trip.report("请输入有效经纬度，经度在前、纬度在后")
                     } else trip.manualPoint(lon, lat, if (coordsys == "GPS WGS-84") "wgs84" else "gcj02", destination)
                 })
-                Text("建立武汉基线后，可输入岳阳示例 113.13 / 29.37，连续提交两次确认；每次推进一分钟模拟时间。", style = MaterialTheme.typography.bodySmall)
+                // 结果靠近提交按钮，避免用户必须滚回页面顶部才能知道失败或已建立基线。
+                if (state.simulated && !state.replaying) {
+                    Text("最近识别：${state.currentCity}", style = MaterialTheme.typography.titleSmall)
+                    Text(state.status, style = MaterialTheme.typography.bodySmall)
+                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+                Text("① 首次提交设定出发城市，不发到达通知。\n② 换成新城市，连续提交两次确认；不用等待真实一分钟。\n手动模式只处理你点击提交的点位，不会自动重复定位。",
+                    style = MaterialTheme.typography.bodySmall)
             }
         }
 

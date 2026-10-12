@@ -32,6 +32,7 @@ data class CityArrival(val guide: CityGuide, val simulated: Boolean, val timesta
 /** 只存最近城市卡片，不保存经纬度轨迹；真实和模拟记录有明确标记。 */
 data class CityTripState(
     val active: Boolean = false, val simulated: Boolean = false, val replaying: Boolean = false,
+    val resolving: Boolean = false,
     val currentCity: String = "尚未识别", val status: String = "开启一次出行，认识一座新城市",
     val arrivals: List<CityArrival> = emptyList(), val events: List<String> = emptyList(),
     val error: String? = null,

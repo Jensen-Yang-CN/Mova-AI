@@ -50,7 +50,7 @@ def resolve_city(key: str, longitude: float, latitude: float, coordsys: str) -> 
     city = _text(address.get("city"))
     adcode = _text(address.get("adcode"))
     if len(adcode) != 6 or not adcode.isdigit():
-        raise CityServiceError("当前坐标未解析到国内行政区域")
+        raise CityServiceError("没有识别到国内城市，请检查经度与纬度数值，或改用城市陆地点位")
     if province in {"北京市", "天津市", "上海市", "重庆市"}:
         city, code = province, adcode[:2] + "0000"
     elif city:
