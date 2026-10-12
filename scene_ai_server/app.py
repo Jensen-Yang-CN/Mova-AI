@@ -23,6 +23,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 from typing import Literal
+from dataclasses import replace
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,6 +49,7 @@ except ConfigError as exc:
     raise SystemExit(f"\n[Mova-AI] 服务无法启动：\n{exc}\n") from exc
 
 PROVIDER = OpenAICompatProvider(SETTINGS)
+CITY_PROVIDER = OpenAICompatProvider(replace(SETTINGS, request_timeout=10, max_retries=0))
 
 # 服务端只知道本次正文由云端生成；手机是否已做本地判断由客户端记录。
 CLOUD_ONLY_REASON = "本接口由云端生成；客户端端侧判断见本机阶段记录"
@@ -119,7 +121,11 @@ def resolve_city_endpoint(body: CityLocationRequest) -> dict:
 def city_guide_endpoint(city_code: str, city_name: str = "新城市") -> dict:
     if len(city_code) != 6 or not city_code.isdigit() or len(city_name) > 40:
         raise HTTPException(status_code=422, detail="城市标识不合法")
-    return city_guide(city_code, city_name)
+    try:
+        return city_guide(city_code, city_name, SETTINGS.amap_key,
+                          lambda prompt: CITY_PROVIDER.chat_text(prompt, temperature=0.2))
+    except CityServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
 
 
 # ===============================================================

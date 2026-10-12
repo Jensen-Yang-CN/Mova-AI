@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-12",
+  "guide_version": 3,
+  "server_tests": {"tests": 8, "failures": 0},
+  "qingdao": {
+    "code": "370200",
+    "foods": ["鲅鱼水饺", "辣炒蛤蜊", "排骨米饭"],
+    "sights": ["栈桥景区", "崂山风景区", "八大关风景区"],
+    "first_request_ms": 5147,
+    "one_cache_request_ms": 256,
+    "existing_phone_card_updated": true,
+    "updated_cards_persisted": true,
+    "cold_restart_verified": true
+  },
+  "chengdu": {
+    "code": "510100",
+    "foods": ["麻婆豆腐", "担担面", "龙抄手"],
+    "sights": ["成都大熊猫繁育研究基地", "成都武侯祠博物馆"]
+  },
+  "provenance": "美食为云端模型城市知识建议；景点为高德本市相关 POI 名称，不是逐项人工核验全部旅游事实。",
+  "scope": "模拟和单次功能联调；不代表全国所有城市均已实测，不代表实时营业、票价或到站识别。无 Key、真实服务地址、用户轨迹或设备序列号。"
+}

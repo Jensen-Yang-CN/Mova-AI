@@ -24,6 +24,9 @@ data class CityGuide(
     val sights: List<String> = emptyList(), val sources: List<CitySource> = emptyList(),
     @SerialName("updated_on") val updatedOn: String = "",
     val curated: Boolean = false, val notice: String = "",
+    val version: Int = 1,
+    @SerialName("food_kind") val foodKind: String = "dishes",
+    val generation: String = "",
 )
 
 @Serializable
@@ -36,4 +39,6 @@ data class CityTripState(
     val currentCity: String = "尚未识别", val status: String = "开启一次出行，认识一座新城市",
     val arrivals: List<CityArrival> = emptyList(), val events: List<String> = emptyList(),
     val error: String? = null,
+    val refreshingGuides: Set<String> = emptySet(),
+    val guideErrors: Map<String, String> = emptyMap(),
 )

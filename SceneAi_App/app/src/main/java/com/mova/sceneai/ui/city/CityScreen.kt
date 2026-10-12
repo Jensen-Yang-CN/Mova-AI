@@ -35,6 +35,7 @@ fun CityScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val trip = MovaApp.instance.container.cityTrip
     val state by trip.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { trip.refreshIncompleteGuides() }
     var reminder by rememberSaveable { mutableStateOf("沿途城市") }
     var longitude by rememberSaveable { mutableStateOf("114.30") }
     var latitude by rememberSaveable { mutableStateOf("30.60") }
@@ -139,7 +140,8 @@ fun CityScreen(onBack: () -> Unit) {
 
         if (state.arrivals.isNotEmpty()) {
             SectionHeader("收到的城市照应", "保存在本机，模拟记录有独立标记")
-            state.arrivals.take(5).forEach { CityArrivalCard(it) }
+            state.arrivals.take(5).forEach { CityArrivalCard(it, it.guide.code in state.refreshingGuides,
+                state.guideErrors[it.guide.code]) { trip.refreshGuide(it.guide.code, it.guide.name) } }
         }
         if (state.events.isNotEmpty()) {
             SectionHeader("本次识别过程")
@@ -151,7 +153,7 @@ fun CityScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun CityArrivalCard(entry: CityArrival) {
+private fun CityArrivalCard(entry: CityArrival, refreshing: Boolean, error: String?, onRefresh: () -> Unit) {
     val guide = entry.guide
     val uri = LocalUriHandler.current
     val snackbar = LocalSnackbar.current
@@ -171,17 +173,29 @@ private fun CityArrivalCard(entry: CityArrival) {
             Text(if (entry.simulated) "模拟行程 · 城市卡片" else "真实出行 · 城市卡片", style = MaterialTheme.typography.labelSmall)
             Text("欢迎来到${guide.name}", style = MaterialTheme.typography.headlineSmall)
             Text(guide.subtitle, style = MaterialTheme.typography.bodyMedium)
+            if (refreshing) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text("正在获取这座城市的美食与景点…", style = MaterialTheme.typography.bodySmall)
+            }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (guide.foods.isNotEmpty()) {
-                Text("先认识本地味道", style = MaterialTheme.typography.titleSmall)
+                Text(if (guide.foodKind == "places") "可以看看这些餐饮店" else "先认识本地味道", style = MaterialTheme.typography.titleSmall)
                 guide.foods.forEach { food -> OutlinedActionButton(food + " · 地图搜索", onClick = { search(food) }) }
             }
             if (guide.sights.isNotEmpty()) {
                 Text("可以去认识的地方", style = MaterialTheme.typography.titleSmall)
                 guide.sights.forEach { sight -> OutlinedActionButton(sight + " · 地图搜索", onClick = { search(sight) }) }
             }
-            if (!guide.curated) OutlinedActionButton("在地图上认识这座城", onClick = { search("景点") })
-            Text(guide.notice, style = MaterialTheme.typography.bodySmall)
-            guide.sources.forEach { source -> TextButton(onClick = { open(source.url) }) { Text(source.title) } }
+            if (guide.foods.isEmpty() && guide.sights.isEmpty() && !refreshing) {
+                Text("城市推荐还未加载，点击刷新即可获取。", style = MaterialTheme.typography.bodySmall)
+            } else if (guide.notice.isNotBlank() && guide.version >= 2) {
+                Text(guide.notice, style = MaterialTheme.typography.bodySmall)
+            }
+            guide.sources.forEach { source ->
+                if (source.url.isBlank()) Text(source.title, style = MaterialTheme.typography.bodySmall)
+                else TextButton(onClick = { open(source.url) }) { Text(source.title) }
+            }
+            OutlinedActionButton(if (refreshing) "正在刷新…" else "刷新城市推荐", enabled = !refreshing, onClick = onRefresh)
             Text("资料更新 ${guide.updatedOn.ifBlank { "待更新" }} · 收到 " +
                 SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(entry.timestamp)), style = MaterialTheme.typography.labelSmall)
         }
@@ -192,9 +206,12 @@ private fun CityArrivalCard(entry: CityArrival) {
 @Composable
 fun CityArrivalScreen(onBack: () -> Unit) {
     val state by MovaApp.instance.container.cityTrip.state.collectAsStateWithLifecycle()
+    val trip = MovaApp.instance.container.cityTrip
+    LaunchedEffect(Unit) { trip.refreshIncompleteGuides() }
     MovaScreen("一份城市照应", subtitle = "初到这里，慢慢认识", onBack = onBack) {
         val entry = state.arrivals.firstOrNull()
         if (entry == null) Text("尚未收到城市卡片，可以在首页开启一次出行或模拟行程。")
-        else CityArrivalCard(entry)
+        else CityArrivalCard(entry, entry.guide.code in state.refreshingGuides,
+            state.guideErrors[entry.guide.code]) { trip.refreshGuide(entry.guide.code, entry.guide.name) }
     }
 }

@@ -6,6 +6,7 @@ import com.mova.sceneai.data.remote.MovaApi
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
@@ -31,6 +32,7 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
     private var detector = CityChangeDetector()
     private var simulationJob: Job? = null
     private val mutex = Mutex()
+    private val persistenceMutex = Mutex()
     @Volatile private var sessionId = 0L
     private var mockClock = 0L
 
@@ -39,25 +41,26 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
         sessionId++
         detector = CityChangeDetector(destination)
         mockClock = 0
-        _state.value = CityTripState(active = true, simulated = simulated,
+        _state.update { current -> CityTripState(active = true, simulated = simulated,
             status = if (simulated) "模拟行程：坐标与时间经过压缩" else "等待有效定位，首次识别建立出发基线",
-            arrivals = _state.value.arrivals)
+            arrivals = current.arrivals, refreshingGuides = current.refreshingGuides,
+            guideErrors = current.guideErrors) }
     }
 
     fun end() {
         simulationJob?.cancel()
         sessionId++
-        _state.value = _state.value.copy(active = false, replaying = false, resolving = false, status = "本次出行已结束")
+        _state.update { it.copy(active = false, replaying = false, resolving = false, status = "本次出行已结束") }
     }
 
     fun report(message: String) {
-        _state.value = _state.value.copy(status = "本次操作未完成，请查看提示", error = message)
+        _state.update { it.copy(status = "本次操作未完成，请查看提示", error = message) }
     }
 
     /** 公共城市点位。它们是离散测试输入，既非用户当前位置，也非真实列车轨迹。 */
     fun simulateRoute(destination: String = "") {
         begin(true, destination)
-        _state.value = _state.value.copy(replaying = true)
+        _state.update { it.copy(replaying = true) }
         simulationJob = scope.launch {
             val points = listOf(
                 Triple(114.30, 30.60, 0L), Triple(114.31, 30.61, 60_000L),
@@ -68,8 +71,8 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
                 submit(CityFixRequest(longitude, latitude, "gcj02"), logicalTime)
                 delay(2_000)
             }
-            _state.value = _state.value.copy(active = false, replaying = false,
-                status = "模拟回放完成；城市识别来自高德，位置输入为模拟")
+            _state.update { it.copy(active = false, replaying = false,
+                status = "模拟回放完成；城市识别来自高德，位置输入为模拟") }
         }
     }
 
@@ -80,7 +83,7 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
         if (!state.value.active || !state.value.simulated) begin(true, destination)
         val logicalTime = mockClock
         mockClock += 60_000
-        _state.value = _state.value.copy(resolving = true, status = "正在识别这个点位…", error = null)
+        _state.update { it.copy(resolving = true, status = "正在识别这个点位…", error = null) }
         scope.launch { submit(CityFixRequest(longitude, latitude, coordsys), logicalTime) }
     }
 
@@ -88,27 +91,27 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
         val currentSession = sessionId
         mutex.withLock {
             if (!state.value.active || currentSession != sessionId) return
-            _state.value = _state.value.copy(resolving = true, status = "正在识别城市（最多 25 秒）…", error = null)
+            _state.update { it.copy(resolving = true, status = "正在识别城市（最多 25 秒）…", error = null) }
             try {
                 val config = settings.current()
                 val city = withTimeout(25_000) { api.resolveCity(config.endpoint("city/resolve"), fix) }
                 if (currentSession != sessionId) return
                 val result = detector.accept(city.code, observedMs)
-                _state.value = _state.value.copy(currentCity = city.name, status = result.status, error = null,
-                    events = (listOf("${city.name} · ${result.status}") + _state.value.events).take(20))
+                _state.update { it.copy(currentCity = city.name, status = result.status, error = null,
+                    events = (listOf("${city.name} · ${result.status}") + it.events).take(20)) }
                 if (!result.entered) return
-                _state.value = _state.value.copy(status = "已确认新城市，正在读取介绍…")
+                _state.update { it.copy(status = "已确认新城市，正在读取介绍…") }
                 // 城市确认不依赖介绍接口成功；介绍失败也保留到达卡片，不丢掉事件。
                 val guide = try {
-                    withTimeout(15_000) { api.cityGuide(config.endpoint("city/guide"), city.code, city.name) }
+                    withTimeout(45_000) { api.cityGuide(config.endpoint("city/guide"), city.code, city.name) }
                 } catch (e: Exception) {
                     if (e is CancellationException && e !is TimeoutCancellationException) throw e
                     CityGuide(city.code, city.name, notice = "介绍暂未加载，请在有网络时再次查看")
                 }
                 if (currentSession != sessionId) return
                 val arrival = CityArrival(guide, state.value.simulated, System.currentTimeMillis())
-                val cards = (listOf(arrival) + state.value.arrivals).take(20)
-                preferences.edit().putString("arrivals", json.encodeToString(cards)).apply()
+                _state.update { it.copy(arrivals = (listOf(arrival) + it.arrivals).take(20)) }
+                persistArrivals()
                 val minute = LocalTime.now().let { it.hour * 60 + it.minute }
                 val silent = config.dndEnabled && when {
                     config.dndStartMinutes < config.dndEndMinutes -> minute in config.dndStartMinutes until config.dndEndMinutes
@@ -116,8 +119,8 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
                     else -> true
                 }
                 val posted = notifications.arrival(arrival, silent)
-                _state.value = _state.value.copy(arrivals = cards,
-                    status = if (posted) "欢迎通知已发出，点击可查看城市卡片" else "城市卡片已保存；系统通知未授权或已关闭")
+                _state.update { it.copy(
+                    status = if (posted) "欢迎通知已发出，点击可查看城市卡片" else "城市卡片已保存；系统通知未授权或已关闭") }
             } catch (e: Exception) {
                 if (e is CancellationException && e !is TimeoutCancellationException) throw e
                 if (currentSession == sessionId) report(if (e is HttpException) {
@@ -126,8 +129,41 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
                 } else "暂时无法识别城市，请检查服务连接后重试")
             } finally {
                 // 失败、超时、候选城市及成功通知都必须结束本次加载；行程仍可继续。
-                if (currentSession == sessionId) _state.value = _state.value.copy(resolving = false)
+                if (currentSession == sessionId) _state.update { it.copy(resolving = false) }
             }
         }
+    }
+
+    /** 旧版本的空卡片自动补加载；无需重新模拟跨城，也不重复发送欢迎通知。 */
+    fun refreshIncompleteGuides() {
+        state.value.arrivals.filter { it.guide.foods.isEmpty() || it.guide.sights.isEmpty() || it.guide.version < 3 }
+            .distinctBy { it.guide.code }.forEach { refreshGuide(it.guide.code, it.guide.name) }
+    }
+
+    @Synchronized
+    fun refreshGuide(code: String, name: String) {
+        if (code in state.value.refreshingGuides) return
+        _state.update { it.copy(refreshingGuides = it.refreshingGuides + code,
+            guideErrors = it.guideErrors - code) }
+        scope.launch {
+            try {
+                val config = settings.current()
+                val guide = withTimeout(45_000) { api.cityGuide(config.endpoint("city/guide"), code, name) }
+                _state.update { current -> current.copy(arrivals = current.arrivals.map { entry ->
+                    if (entry.guide.code == code) entry.copy(guide = guide) else entry
+                }) }
+                persistArrivals()
+            } catch (e: Exception) {
+                if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                _state.update { it.copy(guideErrors = it.guideErrors + (code to "城市推荐暂时加载失败，请检查连接后重试")) }
+            } finally {
+                _state.update { it.copy(refreshingGuides = it.refreshingGuides - code) }
+            }
+        }
+    }
+
+    /** 多座城市可同时刷新；串行保存最新快照，避免旧写入覆盖已更新的城市卡片。 */
+    private suspend fun persistArrivals() = persistenceMutex.withLock {
+        preferences.edit().putString("arrivals", json.encodeToString(state.value.arrivals)).commit()
     }
 }

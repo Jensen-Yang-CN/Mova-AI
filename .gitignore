@@ -47,6 +47,8 @@ config.local.*
 # 标注缓存体积大且可重新生成（重跑不会重复消耗 API 额度），不入库。
 # 仓库保留公开的 pilot 数据与报告；下载到 model_output 的正式评测产物留在本地。
 scene_ai_server/data/cache/
+# 自动城市推荐缓存可重新获取，不含模型权重，不写入公开 Git 历史。
+scene_ai_server/data/city_guides/
 scene_ai_server/data/model_output/
 # 训练、转换与推理的原始日志可能包含服务器绝对路径，只在本地留存。
 scene_ai_server/data/train_logs/
