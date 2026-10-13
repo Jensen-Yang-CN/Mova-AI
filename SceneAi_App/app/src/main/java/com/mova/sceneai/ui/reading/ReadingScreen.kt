@@ -67,8 +67,8 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
         onPdf = { vm.readPdf(it) },
     )
 
-    MovaScreen(title = "读懂一页", subtitle = "把长材料，变成清楚的下一步", onBack = onBack) {
-        com.mova.sceneai.ui.components.StoryIntro("02", "把复杂的内容，\n读成清楚的思路。", "文字、截图或 PDF，都能从这里开始。关键事项记得回到原文核对。")
+    MovaScreen(title = "读懂一页", subtitle = "先找到重要的部分", onBack = onBack) {
+        com.mova.sceneai.ui.components.StoryIntro("02", "内容太长？\n先看重点", "支持文字、截图与 PDF\n重要信息记得对照原文")
 
         MovaCard(contentPadding = 18) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -111,7 +111,7 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                             Text("拍一张文章截图", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "适合网页、App 里的文章与长通知。",
+                                "网页文章、群通知，拍下来就能读",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -135,7 +135,7 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                             Text("选择一个 PDF 文件", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "当前只解析文档前几页，适合论文摘要、通知、说明书这类前部就有关键信息的文档。",
+                                "当前只读前几页，适合通知、摘要和说明书",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

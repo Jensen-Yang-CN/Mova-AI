@@ -77,7 +77,7 @@ Android 短文本 ──> 端侧小模型 ──> 契约校验/槽位提取 ─�
 
 ### 实机界面展示
 
-以下展示当前版本在 OPPO Find X7 Ultra 上运行的实际界面。
+以下展示当前版本在 OPPO Find X7 Ultra 上运行的深色模式实机界面。
 
 | 此刻 | 把话说好 | 读懂一页 |
 |---|---|---|
@@ -87,9 +87,9 @@ Android 短文本 ──> 端侧小模型 ──> 契约校验/槽位提取 ─�
 |---|---|---|
 | ![好好吃饭](docs/assets/ui-v3/food.png) | ![城市初见](docs/assets/ui-v3/city.png) | ![运行与技术](docs/assets/ui-v3/runtime.png) |
 
-| 沟通结果 | 深色首页 |
+| 沟通结果 | 模型与外观设置 |
 |---|---|
-| ![沟通结果](docs/assets/ui-v3/chat-result.png) | ![深色首页](docs/assets/ui-v3/home-dark.png) |
+| ![沟通结果](docs/assets/ui-v3/chat-result.png) | ![模型与外观设置](docs/assets/ui-v3/settings.png) |
 
 截图来自真实 APK，端侧状态与调用记录由实际运行产生。截图中的耗时是单条示例结果，不代表跨设备性能基准。
 

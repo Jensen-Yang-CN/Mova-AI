@@ -46,7 +46,7 @@ fun HomeScreen(onOpenScene: (String) -> Unit, onOpenSettings: () -> Unit, onOpen
     val vm = movaViewModel { HomeViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.refresh() }
-    MovaScreen(title = "Mova · 照应", subtitle = "让日常，多一点从容",
+    MovaScreen(title = "Mova · 照应", subtitle = "先处理眼前的事",
         verticalArrangement = Arrangement.spacedBy(12.dp), actions = {
         Text(LocalDate.now().format(DateTimeFormatter.ofPattern("MM / dd")),
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -61,29 +61,29 @@ fun HomeScreen(onOpenScene: (String) -> Unit, onOpenSettings: () -> Unit, onOpen
                 state.status == HomeStatus.CLOUD_OK, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("从一件小事开始", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            Text("YOUR DAILY SPACE", fontSize = 9.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("今天想做什么", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text("01 — 04", fontSize = 9.sp, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SceneTile("01", "把话说好", "给表达留一点余地", Modifier.weight(1f)) { onOpenScene(Routes.CHAT) }
-            SceneTile("02", "读懂一页", "重点清楚，思路轻一点", Modifier.weight(1f)) { onOpenScene(Routes.READING) }
+            SceneTile("01", "把话说好", "回消息 · 改措辞", Modifier.weight(1f)) { onOpenScene(Routes.CHAT) }
+            SceneTile("02", "读懂一页", "找重点 · 看摘要", Modifier.weight(1f)) { onOpenScene(Routes.READING) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SceneTile("03", "好好吃饭", "照顾自己，从一顿饭开始", Modifier.weight(1f)) { onOpenScene(Routes.FOOD) }
-            SceneTile("04", "城市初见", "陌生的地方，也有照应", Modifier.weight(1f)) { onOpenScene(Routes.CITY) }
+            SceneTile("03", "好好吃饭", "拍食材 · 找做法", Modifier.weight(1f)) { onOpenScene(Routes.FOOD) }
+            SceneTile("04", "城市初见", "新城市 · 先逛逛", Modifier.weight(1f)) { onOpenScene(Routes.CITY) }
         }
         MovaCard(onClick = onOpenTech, contentPadding = 17) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Filled.Insights, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("看见 AI 如何工作", style = MaterialTheme.typography.titleSmall)
-                    Text("手机理解 · 云端协作 · 真实运行记录", style = MaterialTheme.typography.bodySmall,
+                    Text("查看运行记录", style = MaterialTheme.typography.titleSmall)
+                    Text("模型状态 · 请求耗时 · 处理过程", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(18.dp))
             }
         }
-        Text("小事有人接住，生活慢慢上手。", style = MaterialTheme.typography.labelSmall,
+        Text("不知道从哪开始？每个功能都能先试示例", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 6.dp))
     }
@@ -100,13 +100,13 @@ private fun HomeHero(onChat: () -> Unit) {
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(
             0f to Color.Transparent, .65f to Color.Transparent, 1f to MovaInk.copy(.92f))))
         Column(Modifier.fillMaxWidth().padding(22.dp)) {
-            Text("A LITTLE HELP, RIGHT HERE", style = MaterialTheme.typography.labelSmall.copy(
+            Text("MOVA / EVERYDAY", style = MaterialTheme.typography.labelSmall.copy(
                 fontSize = 9.sp, letterSpacing = 1.2.sp), color = MovaMint)
             Spacer(Modifier.height(17.dp))
-            Text("先照顾好\n这一刻。", style = MaterialTheme.typography.displaySmall.copy(
+            Text("今天先处理\n哪件事", style = MaterialTheme.typography.displaySmall.copy(
                 fontSize = 34.sp, lineHeight = 45.sp, fontWeight = FontWeight.Bold), color = Color.White)
             Spacer(Modifier.height(11.dp))
-            Text("难回的消息、陌生的城市，\n日常里的小事，慢慢来。",
+            Text("回一条消息，读一份通知\n或者看看晚饭做什么",
                 style = MaterialTheme.typography.bodySmall, color = Color(0xFFD7E9E6))
             Spacer(Modifier.height(17.dp))
             Button(onClick = onChat, modifier = Modifier.fillMaxWidth().height(51.dp),

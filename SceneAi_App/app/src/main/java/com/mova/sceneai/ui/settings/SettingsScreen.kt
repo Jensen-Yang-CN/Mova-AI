@@ -203,7 +203,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                     onClick = { if (!state.importingEdge) modelPicker.launch(arrayOf("*/*")) },
                 )
                 Text(
-                    "从手机存储选择本项目的 GGUF（约 397 MB）；App 会核对 SHA-256 后加载。模型不上传服务器。",
+                    "从手机存储选择 GGUF（约 397 MB）\n校验 SHA-256 后在本机加载，模型不会上传",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -211,7 +211,7 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                 SwitchRow(
                     title = "优先使用端侧",
                     desc = if (state.edge.ready) {
-                        "聊天意图先在本地判断；回复正文仍由云端生成"
+                        "先在本机判断意图，回复正文由云端生成"
                     } else {
                         "端侧模型接入后可用"
                     },

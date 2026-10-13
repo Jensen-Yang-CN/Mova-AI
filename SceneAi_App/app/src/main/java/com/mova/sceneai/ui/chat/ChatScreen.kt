@@ -85,8 +85,8 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
     LaunchedEffect(pendingShare) { if (pendingShare != null) vm.consumeSharedInput() }
     val semantic = LocalMovaSemanticColors.current
 
-    MovaScreen(title = "把话说好", subtitle = "有自己的边界，也能照顾关系", onBack = onBack) {
-        StoryIntro("01", "有自己的边界，\n也有好的表达。", "带来一句消息，补充你的处境。选好目标，最后由你确认。")
+    MovaScreen(title = "把话说好", subtitle = "回消息，先想清楚怎么说", onBack = onBack) {
+        StoryIntro("01", "想好要说什么\n再决定怎么说", "粘贴消息，选好语气和目标\n看过建议，再决定发哪句")
 
         MovaCard(contentPadding = 18) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -95,7 +95,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                 // 从别的 App 分享进来时的提示条：让用户明白这句话是从哪来的、正在发生什么
                 state.fromShare?.let { source ->
                     InfoBanner(
-                        text = "${source.label}：内容已填入。确认沟通目标后，点击生成。",
+                        text = "已填入${source.label}的内容，选好目标就能生成回复",
                         icon = Icons.Filled.Share,
                         container = semantic.successContainer,
                         contentColor = semantic.onSuccessContainer,
@@ -132,7 +132,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                 if (state.mode == ChatMode.REPLY) {
                     Text("这次，你想达到什么目标？", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "明确选择会优先采用；你可以随时改变主意",
+                        "可以选一个目标，也可以保持「不指定」",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -152,7 +152,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text("带入多轮上下文", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "对话历史越长，回复越贴合真实语境",
+                        "加上前面的消息，方便看清来龙去脉",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -211,7 +211,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                     Text("手机已理解你的需求", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                     Text("${decision.goal ?: "根据语境回复"} · ${decision.slots.optString("target_tone", "自然")} · ${Fmt.duration(localDecision?.latencyMs)}",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Text(if (state.load.isLoading) "正在组织可选择的表达，最后由你确认。" else "本地理解已完成。看过回复后，再决定怎样表达。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Text(if (state.load.isLoading) "正在生成回复，稍后可以挑选" else "回复已生成，选一句合适的再复制", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
         }
@@ -228,7 +228,6 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
 
 @Composable
 private fun ChatResultCard(dto: ChatDto, onRegenerate: () -> Unit) {
-    val semantic = LocalMovaSemanticColors.current
     var explainOpen by remember { mutableStateOf(true) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -303,12 +302,6 @@ private fun ChatResultCard(dto: ChatDto, onRegenerate: () -> Unit) {
                 }
             }
         }
-
-        InfoBanner(
-            text = "AI 给的是选项，不是结论。挑一条最像你的，或者按自己的话改一改。",
-            container = semantic.successContainer,
-            contentColor = semantic.onSuccessContainer,
-        )
 
         OutlinedActionButton(
             text = "换一批",

@@ -1,21 +1,21 @@
 {
-  "date": "2026-10-12",
+  "date": "2026-10-13",
   "device_model": "OPPO Find X7 Ultra",
   "android_build": "success",
   "apk_installed": true,
-  "screen_review": ["home", "chat", "reading", "food", "city", "runtime"],
+  "screen_review": ["home", "chat", "reading", "food", "city", "runtime", "settings", "chat-result"],
   "checked_interactions": ["chat_reply_rewrite_switch", "reading_pdf_tab", "runtime_details_expand"],
   "chat_sample": {
     "completed": true,
     "reply_body_visible": true,
     "copy_action_visible": true,
     "runtime_recorded": true,
-    "ui_total_seconds": 11.32,
-    "ui_edge_decision_seconds": 9.39,
+    "ui_total_seconds": 10.86,
+    "ui_edge_decision_seconds": 8.98,
     "scope": "One built-in demonstration example, not a performance benchmark."
   },
-  "home_dark_mode_checked": true,
-  "original_theme_restored": true,
+  "gallery_theme": "dark",
+  "dark_mode_left_selected_for_demo": true,
   "assets": {
     "backgrounds": "Built-in image_gen; two original assets; prompts in docs/16.",
     "decorations": "Compose Canvas",

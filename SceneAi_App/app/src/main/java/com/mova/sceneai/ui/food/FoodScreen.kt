@@ -67,8 +67,8 @@ fun FoodScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
         onImage = { media -> vm.analyze(media) },
     )
 
-    MovaScreen(title = "好好吃饭", subtitle = "从手边的食材，开始一顿饭", onBack = onBack) {
-        com.mova.sceneai.ui.components.StoryIntro("03", "一顿认真做的饭，\n也是对自己的照应。", "拍下手边的食材，找到这顿饭的灵感。食材安全仍需自己确认。")
+    MovaScreen(title = "好好吃饭", subtitle = "看看手边能做什么", onBack = onBack) {
+        com.mova.sceneai.ui.components.StoryIntro("03", "冰箱里有什么\n就从什么开始", "拍下食材，看看能做什么\n新鲜度和安全仍需自己确认")
 
         if (state.stage < 0 && state.result == null) {
             MovaCard {
@@ -76,7 +76,7 @@ fun FoodScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                     com.mova.sceneai.ui.components.TaskStep("1", "从手边的食材开始")
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "没有食材照片也没关系，先点「试试示例」看看效果。",
+                        "手边没食材？先用示例看看效果",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

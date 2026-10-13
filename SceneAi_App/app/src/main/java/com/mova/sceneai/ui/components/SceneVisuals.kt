@@ -123,10 +123,10 @@ fun SceneIntro(index: String, title: String, description: String) {
             }
             Column(Modifier.padding(20.dp).fillMaxWidth(.70f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("$index / " + when (index) {
-                    "02" -> "READ & REFLECT"
-                    "03" -> "COOK & CARE"
-                    "04" -> "A NEW CHAPTER"
-                    else -> "WORDS & CONNECTION"
+                    "02" -> "阅读"
+                    "03" -> "做饭"
+                    "04" -> "出行"
+                    else -> "沟通"
                 }, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)

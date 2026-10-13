@@ -85,7 +85,7 @@ fun TechPanelScreen(onOpenSettings: () -> Unit) {
     var tryoutOpen by rememberSaveable { mutableStateOf(false) }
     var allRequests by rememberSaveable { mutableStateOf(false) }
 
-    MovaScreen(title = "运行与技术", subtitle = "看见照应背后的每一步") {
+    MovaScreen(title = "运行与技术", subtitle = "模型状态与真实请求") {
         RuntimeHero(edge)
         MovaCard(contentPadding = 18) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -95,11 +95,11 @@ fun TechPanelScreen(onOpenSettings: () -> Unit) {
                     PipelineStep("02", "云端组织", "候选 / 解释", Modifier.weight(1f))
                     PipelineStep("03", "由你决定", "选择 / 修改", Modifier.weight(1f))
                 }
-                Text("这是沟通辅助的协作路径。端侧先理解需求，回复正文由云端生成。",
+                Text("手机先判断需求，回复正文由云端生成",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        SectionHeader("本机已记录的请求", "来自实际调用；不是模型评测准确率")
+        SectionHeader("本机已记录的请求", "下面是调用记录，不是模型准确率")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             RuntimeMetric(stats.total.toString(), "请求总数", Modifier.weight(1f))
             RuntimeMetric(stats.cloudCount.toString(), "云端完成", Modifier.weight(1f))
@@ -133,7 +133,7 @@ fun TechPanelScreen(onOpenSettings: () -> Unit) {
                     KeyValueRow("端侧完成", stats.edgeCount.toString())
                     KeyValueRow("请求失败", stats.failureCount.toString())
                     KeyValueRow("云端调用占比", Fmt.percent(stats.cloudRatio))
-                    Text("只有完整用户结果由端侧完成，才计入「端侧完成」。端侧预判不计作离线生成。",
+                    Text("「端侧完成」只统计完整结果；本地预判不计入",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -152,7 +152,7 @@ fun TechPanelScreen(onOpenSettings: () -> Unit) {
         if (tryoutOpen) EdgeTryout(edge, container.repository::inspectEdge)
         SectionHeader("最近的请求", "执行方式、耗时与实际路由原因")
         if (traces.isEmpty()) {
-            EmptyState("📊", "还没有运行记录", "完成一次功能调用后，这里会显示它的实际执行过程。")
+            EmptyState("📊", "还没有运行记录", "用一次功能，这里就会出现处理记录")
         } else {
             traces.take(if (allRequests) 30 else 5).forEach { TraceRow(it) }
             if (traces.size > 5) TextButton(onClick = { allRequests = !allRequests }) {
@@ -188,7 +188,7 @@ private fun RuntimeHero(edge: EdgeRuntimeState) {
                 Text(if (edge.ready) "ON DEVICE / 本机模型已就绪" else "ON DEVICE / 等待导入模型",
                     style = MaterialTheme.typography.labelSmall, color = MovaMint)
             }
-            Text("理解过程，\n可以被看见。", style = MaterialTheme.typography.headlineMedium,
+            Text("这次请求\n怎么完成", style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold, color = Color.White)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(edge.quantization ?: "GGUF", Modifier.background(Color.White.copy(.10f), RoundedCornerShape(8.dp))

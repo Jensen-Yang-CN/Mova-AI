@@ -72,13 +72,13 @@ fun CityScreen(onBack: () -> Unit) {
         else permissionLauncher.launch(permissions.toTypedArray())
     }
 
-    MovaScreen("城市初见", subtitle = "初到一座城，也有一份照应", onBack = onBack) {
-        StoryIntro("04", "每一次抵达，\n都有新的开始。", "开启一次出行，城市变化确认后送来一张小指南。先认识本地味道，再决定去哪里走走。")
+    MovaScreen("城市初见", subtitle = "到一座城，看看有什么", onBack = onBack) {
+        StoryIntro("04", "到了新城市\n先从这里逛起", "开启出行，换城后收到欢迎卡片\n美食和景点可以跳转地图")
         MovaCard(contentPadding = 18) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TaskStep("1", "这次怎样提醒")
         MovaChipRow(listOf("沿途城市", "仅岳阳", "仅武汉"), reminder, { reminder = it })
-        Text("进入城市不等于列车到站。每趟同城只提醒一次；首个城市作为出发基线。", style = MaterialTheme.typography.bodySmall)
+        Text("首次定位记作出发地；换城确认两次，同城只提醒一次", style = MaterialTheme.typography.bodySmall)
         }
         }
 
@@ -107,7 +107,7 @@ fun CityScreen(onBack: () -> Unit) {
         MovaCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("武汉 → 岳阳", style = MaterialTheme.typography.titleLarge)
-                Text("播放公开城市点位，经高德真实解析后触发模拟欢迎通知。时间经过压缩，点位不代表真实铁路轨迹。", style = MaterialTheme.typography.bodySmall)
+                Text("用公开点位模拟换城，经高德解析后触发欢迎通知\n点位和时间仅供演示，不代表真实列车轨迹", style = MaterialTheme.typography.bodySmall)
                 SolidActionButton(if (state.replaying) "模拟回放中…" else "播放模拟行程", enabled = !state.active,
                     modifier = Modifier.fillMaxWidth(), onClick = { start("mock") })
             }
@@ -117,7 +117,7 @@ fun CityScreen(onBack: () -> Unit) {
         SectionHeader("真实出行", "仅在你开启的这次出行中定位")
         MovaCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("运行时有持续通知与停止入口。城市解析会向所配置的服务及高德发送坐标；不保存完整轨迹。", style = MaterialTheme.typography.bodySmall)
+                Text("运行时可从通知栏停止\n坐标会发往所配置的服务及高德，不保存完整轨迹", style = MaterialTheme.typography.bodySmall)
                 SolidActionButton("开始真实出行", modifier = Modifier.fillMaxWidth(), enabled = !state.active, onClick = { start("real") })
             }
         }
