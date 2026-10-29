@@ -1,10 +1,18 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+// 本机公开服务地址保存在已忽略的 local.properties，普通更新构建也能沿用。
+// 命令行参数／环境变量仍可覆盖；模型 Key 不属于 Android 构建配置。
+val localBuildProperties = Properties().apply {
+    val propertiesFile = rootProject.file("local.properties")
+    if (propertiesFile.isFile) propertiesFile.inputStream().use { load(it) }
 }
 
 android {
@@ -34,9 +42,17 @@ android {
             }
         }
 
-        // 首次启动写入设置项的默认服务地址
-        // 模拟器用 10.0.2.2；真机请改成电脑的局域网 IP（App 内也可随时修改）
-        buildConfigField("String", "DEFAULT_BASE_URL", "\"http://10.0.2.2:8000/\"")
+        // 评审安装包可在构建时注入公网 Mova 后端地址；绝不把百炼 Key 写进 APK。
+        // 未提供地址时保持空白，让用户明确知道云端尚未配置，而非误连开发电脑。
+        val serviceUrl = providers.gradleProperty("movaServiceBaseUrl")
+            .orElse(providers.environmentVariable("MOVA_SERVICE_BASE_URL"))
+            .orElse(localBuildProperties.getProperty("mova.serviceBaseUrl", ""))
+            .get().trim()
+        require(serviceUrl.isEmpty() || serviceUrl.startsWith("https://")) {
+            "movaServiceBaseUrl 必须是公网 HTTPS 地址"
+        }
+        val escapedServiceUrl = serviceUrl.replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "DEFAULT_BASE_URL", "\"$escapedServiceUrl\"")
     }
 
     /**

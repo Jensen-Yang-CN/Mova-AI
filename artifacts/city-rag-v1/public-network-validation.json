@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-29",
+  "device": "OPPO Find X7 Ultra",
+  "apk_sha256": "2dde036da03fa0d40f454f65309cdb31b5158aeff58445bc4dad8ad9a45a356a",
+  "endpoint_shape": "https://xxx.ts.net/api/",
+  "default_endpoint_injected": true,
+  "saved_endpoint_changed_to_public_https": true,
+  "adb_reverse_rules": 0,
+  "wifi_enabled": false,
+  "mobile_data_enabled": true,
+  "tailscale_client_installed_on_phone": false,
+  "phone_health_check": "connection normal",
+  "instrumentation": {
+    "method": "CityRagDeviceTest#guideAndAnswerKeepTheirSourcesOnDevice",
+    "passed": 1,
+    "failed": 0,
+    "elapsed_seconds": 10.333
+  },
+  "checks": ["Public HTTPS guide fetch", "Real model evidence selection with citations", "Unsupported live-information response"],
+  "hosting": "FastAPI runs on the development PC; Tailscale Funnel publishes the API path",
+  "limitation": "PC and tunnel must stay online; no standalone cloud VM was deployed"
+}

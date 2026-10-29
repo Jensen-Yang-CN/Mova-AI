@@ -16,6 +16,26 @@ data class ResolvedCity(
 @Serializable
 data class CitySource(val title: String, val url: String)
 
+/** 同一块资料既用于城市卡片，也用于问答引用，链接由资料库提供。 */
+@Serializable
+data class CityKnowledgeItem(
+    val id: String, val name: String, val kind: String, val text: String,
+    @SerialName("source_title") val sourceTitle: String,
+    @SerialName("source_url") val sourceUrl: String,
+    @SerialName("verified_on") val verifiedOn: String,
+)
+
+@Serializable
+data class CityQuestionRequest(@SerialName("city_code") val code: String, val question: String)
+
+@Serializable
+data class CityAnswer(
+    val answer: String, val citations: List<CityKnowledgeItem> = emptyList(),
+    val grounded: Boolean = false, val mode: String = "insufficient",
+    @SerialName("kb_revision") val kbRevision: String = "",
+    val question: String = "",
+)
+
 @Serializable
 data class CityGuide(
     @SerialName("city_code") val code: String,
@@ -27,6 +47,9 @@ data class CityGuide(
     val version: Int = 1,
     @SerialName("food_kind") val foodKind: String = "dishes",
     val generation: String = "",
+    val knowledge: List<CityKnowledgeItem> = emptyList(),
+    @SerialName("knowledge_status") val knowledgeStatus: String = "",
+    @SerialName("kb_revision") val kbRevision: String = "",
 )
 
 @Serializable
@@ -41,4 +64,7 @@ data class CityTripState(
     val error: String? = null,
     val refreshingGuides: Set<String> = emptySet(),
     val guideErrors: Map<String, String> = emptyMap(),
+    val askingCities: Set<String> = emptySet(),
+    val answers: Map<String, CityAnswer> = emptyMap(),
+    val answerErrors: Map<String, String> = emptyMap(),
 )

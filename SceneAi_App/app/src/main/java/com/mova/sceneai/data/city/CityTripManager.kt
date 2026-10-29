@@ -136,7 +136,9 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
 
     /** 旧版本的空卡片自动补加载；无需重新模拟跨城，也不重复发送欢迎通知。 */
     fun refreshIncompleteGuides() {
-        state.value.arrivals.filter { it.guide.foods.isEmpty() || it.guide.sights.isEmpty() || it.guide.version < 3 }
+        // v4 的 missing 是已确认资料缺口，不能每次打开页面都重复请求。
+        state.value.arrivals.filter { it.guide.version < 4 ||
+            (it.guide.knowledgeStatus != "missing" && (it.guide.foods.isEmpty() || it.guide.sights.isEmpty())) }
             .distinctBy { it.guide.code }.forEach { refreshGuide(it.guide.code, it.guide.name) }
     }
 
@@ -158,6 +160,29 @@ class CityTripManager(context: Context, private val settings: SettingsRepository
                 _state.update { it.copy(guideErrors = it.guideErrors + (code to "城市推荐暂时加载失败，请检查连接后重试")) }
             } finally {
                 _state.update { it.copy(refreshingGuides = it.refreshingGuides - code) }
+            }
+        }
+    }
+
+    /** 单轮城市资料问答；仅发送城市编码与本次问题，不上传位置和行程记录。 */
+    @Synchronized
+    fun askCity(code: String, question: String) {
+        val clean = question.trim().take(300)
+        if (clean.length < 2 || code in state.value.askingCities) return
+        _state.update { it.copy(askingCities = it.askingCities + code,
+            answers = it.answers - code, answerErrors = it.answerErrors - code) }
+        scope.launch {
+            try {
+                val config = settings.current()
+                val answer = withTimeout(20_000) {
+                    api.askCity(config.endpoint("city/ask"), CityQuestionRequest(code, clean))
+                }.copy(question = clean)
+                _state.update { it.copy(answers = it.answers + (code to answer)) }
+            } catch (e: Exception) {
+                if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                _state.update { it.copy(answerErrors = it.answerErrors + (code to "资料查询暂时未完成，请检查连接后重试")) }
+            } finally {
+                _state.update { it.copy(askingCities = it.askingCities - code) }
             }
         }
     }

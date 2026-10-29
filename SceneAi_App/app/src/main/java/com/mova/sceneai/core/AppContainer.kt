@@ -34,6 +34,7 @@ class AppContainer(context: Context) {
 
     /** 接收其它 App 分享过来的文字（微信长按消息 → 分享 → Mova-AI） */
     val sharedInbox = SharedInbox()
+    val actionShareInbox = ActionShareInbox()
     val openCity = MutableStateFlow(false)
     val cityTrip = CityTripManager(appContext, settings,
         ApiFactory.createApi(ApiFactory.createClient(), json), json)

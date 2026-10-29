@@ -9,13 +9,45 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.mova.sceneai.BuildConfig
+import java.net.URI
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.movaDataStore: DataStore<Preferences> by preferencesDataStore(name = "mova_settings")
 
+/**
+ * 旧版曾把本机、模拟器或公司内网地址保存到用户设置。评审包注入公网地址后，升级安装也应改用新地址；
+ * 用户后来手动填写的其他服务地址继续保留，不覆盖他们的选择。
+ */
+private fun isPrivateHost(host: String?): Boolean {
+    if (host.isNullOrBlank()) return false
+    if (host in setOf("localhost", "::1") || host.startsWith("127.")) return true
+    val octets = host.split('.').map { it.toIntOrNull() }
+    if (octets.size != 4 || octets.any { it == null || it !in 0..255 }) return false
+    val first = octets[0] ?: return false
+    val second = octets[1] ?: return false
+    return first == 10 || (first == 172 && second in 16..31) ||
+        (first == 192 && second == 168) || (first == 169 && second == 254)
+}
+
+private fun effectiveBaseUrl(saved: String?): String {
+    val published = BuildConfig.DEFAULT_BASE_URL
+    if (published.isBlank()) return saved ?: published
+    val oldHost = runCatching { URI(saved.orEmpty()).host?.lowercase() }.getOrNull()
+    return if (saved.isNullOrBlank() || isPrivateHost(oldHost)) {
+        published
+    } else {
+        saved
+    }
+}
+
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+/** 云端地址由用户填写或构建时注入；空地址不能悄悄变成手机自身的 localhost。 */
+class ServiceNotConfiguredException : IllegalStateException("尚未配置 Mova 云端服务地址")
+
+class InvalidServiceAddressException : IllegalArgumentException("服务地址必须是完整的 HTTP 或 HTTPS 地址")
 
 /** 打扰敏感度：越低越安静。对应触发层里打扰成本项的一个乘子。 */
 enum class InterruptSensitivity(val label: String, val factor: Double) {
@@ -36,16 +68,19 @@ data class MovaSettings(
     val dndEndMinutes: Int = 7 * 60,
     val sensitivity: InterruptSensitivity = InterruptSensitivity.MEDIUM,
     val timeoutSeconds: Int = 60,
+    val chatPreference: String = "",
+    val foodAvoid: String = "",
 ) {
     /** 归一化后的服务基地址：永远以 "/" 结尾，便于拼接端点路径。 */
     val normalizedBaseUrl: String
         get() {
             val trimmed = baseUrl.trim()
-            if (trimmed.isEmpty()) return BuildConfig.DEFAULT_BASE_URL
-            val withScheme =
-                if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed
-                else "http://$trimmed"
-            return if (withScheme.endsWith("/")) withScheme else "$withScheme/"
+            if (trimmed.isEmpty()) throw ServiceNotConfiguredException()
+            val uri = runCatching { URI(trimmed) }.getOrNull()
+            if (uri?.scheme !in listOf("http", "https") || uri?.host.isNullOrBlank()) {
+                throw InvalidServiceAddressException()
+            }
+            return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
         }
 
     fun endpoint(path: String): String = normalizedBaseUrl + path.trimStart('/')
@@ -64,11 +99,13 @@ class SettingsRepository(private val context: Context) {
         val DND_END = intPreferencesKey("dnd_end")
         val SENSITIVITY = intPreferencesKey("sensitivity")
         val TIMEOUT = intPreferencesKey("timeout_seconds")
+        val CHAT_PREFERENCE = stringPreferencesKey("chat_preference")
+        val FOOD_AVOID = stringPreferencesKey("food_avoid")
     }
 
     val settings: Flow<MovaSettings> = context.movaDataStore.data.map { p ->
         MovaSettings(
-            baseUrl = p[Keys.BASE_URL] ?: BuildConfig.DEFAULT_BASE_URL,
+            baseUrl = effectiveBaseUrl(p[Keys.BASE_URL]),
             onboardingDone = p[Keys.ONBOARDING_DONE] ?: false,
             proactiveEnabled = p[Keys.PROACTIVE] ?: true,
             preferEdge = p[Keys.PREFER_EDGE] ?: true,
@@ -80,6 +117,8 @@ class SettingsRepository(private val context: Context) {
             sensitivity = InterruptSensitivity.entries
                 .getOrElse(p[Keys.SENSITIVITY] ?: InterruptSensitivity.MEDIUM.ordinal) { InterruptSensitivity.MEDIUM },
             timeoutSeconds = p[Keys.TIMEOUT] ?: 60,
+            chatPreference = p[Keys.CHAT_PREFERENCE] ?: "",
+            foodAvoid = p[Keys.FOOD_AVOID] ?: "",
         )
     }
 
@@ -95,6 +134,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDndEnd(minutes: Int) = edit { it[Keys.DND_END] = minutes }
     suspend fun setSensitivity(value: InterruptSensitivity) = edit { it[Keys.SENSITIVITY] = value.ordinal }
     suspend fun setTimeoutSeconds(value: Int) = edit { it[Keys.TIMEOUT] = value }
+    // 偏好由用户主动保存；只在相应功能发起云端请求时传递，不自动读取聊天或相册。
+    suspend fun setPreferences(chat: String, avoid: String) = edit {
+        it[Keys.CHAT_PREFERENCE] = chat.trim().take(200)
+        it[Keys.FOOD_AVOID] = avoid.trim().take(200)
+    }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.movaDataStore.edit(block)

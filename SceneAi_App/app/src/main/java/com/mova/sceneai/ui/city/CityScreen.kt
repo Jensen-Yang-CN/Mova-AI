@@ -206,7 +206,7 @@ private fun CityArrivalCard(entry: CityArrival, refreshing: Boolean, error: Stri
                 guide.sights.forEach { sight -> OutlinedActionButton(sight + " · 地图搜索", onClick = { search(sight) }) }
             }
             if (guide.foods.isEmpty() && guide.sights.isEmpty() && !refreshing) {
-                Text("城市推荐还未加载，点击刷新即可获取。", style = MaterialTheme.typography.bodySmall)
+                Text(guide.notice.ifBlank { "城市资料暂未加载，可以稍后刷新" }, style = MaterialTheme.typography.bodySmall)
             } else if (guide.notice.isNotBlank() && guide.version >= 2) {
                 Text(guide.notice, style = MaterialTheme.typography.bodySmall)
             }
@@ -214,9 +214,58 @@ private fun CityArrivalCard(entry: CityArrival, refreshing: Boolean, error: Stri
                 if (source.url.isBlank()) Text(source.title, style = MaterialTheme.typography.bodySmall)
                 else TextButton(onClick = { open(source.url) }) { Text(source.title) }
             }
+            if (guide.knowledge.isNotEmpty()) {
+                var evidenceOpen by rememberSaveable(guide.code) { mutableStateOf(false) }
+                TextButton(onClick = { evidenceOpen = !evidenceOpen }) {
+                    Text(if (evidenceOpen) "收起资料依据" else "看看推荐依据")
+                }
+                if (evidenceOpen) guide.knowledge.forEach { item ->
+                    Text(item.name, style = MaterialTheme.typography.titleSmall)
+                    Text(item.text, style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { open(item.sourceUrl) }) { Text(item.sourceTitle) }
+                    Text("核对于 ${item.verifiedOn}", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            if (guide.knowledgeStatus == "available") CityKnowledgeQuestion(guide.code)
             OutlinedActionButton(if (refreshing) "正在刷新…" else "刷新城市推荐", enabled = !refreshing, onClick = onRefresh)
             Text("资料更新 ${guide.updatedOn.ifBlank { "待更新" }} · 收到 " +
                 SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(entry.timestamp)), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+/** 问答只围绕本城资料，答案与来源同屏；不会把静态资料当成实时出行服务。 */
+@Composable
+private fun CityKnowledgeQuestion(code: String) {
+    val trip = MovaApp.instance.container.cityTrip
+    val state by trip.state.collectAsStateWithLifecycle()
+    val uri = LocalUriHandler.current
+    val snackbar = LocalSnackbar.current
+    val scope = rememberCoroutineScope()
+    var question by rememberSaveable(code) { mutableStateOf("") }
+    val asking = code in state.askingCities
+    HorizontalDivider()
+    Text("问问这座城", style = MaterialTheme.typography.titleMedium)
+    Text("从已收录的美食与景点资料中查找，回答附来源", style = MaterialTheme.typography.bodySmall)
+    OutlinedTextField(question, { question = it.take(300) }, modifier = Modifier.fillMaxWidth(),
+        enabled = !asking, label = { Text("想了解什么") }, placeholder = { Text("比如：当地有哪些特色美食") }, maxLines = 3)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(enabled = !asking, onClick = { question = "当地有哪些特色美食" }) { Text("本地味道") }
+        TextButton(enabled = !asking, onClick = { question = "有哪些可以逛的景点" }) { Text("逛逛哪里") }
+    }
+    SolidActionButton(if (asking) "正在查找资料…" else "查找资料", enabled = !asking && question.trim().length >= 2,
+        modifier = Modifier.fillMaxWidth(), onClick = { trip.askCity(code, question) })
+    state.answerErrors[code]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    state.answers[code]?.let { result ->
+        Text(result.question, style = MaterialTheme.typography.titleSmall)
+        if (result.mode == "retrieval") Text("找到的相关资料", style = MaterialTheme.typography.labelSmall)
+        Text(result.answer, style = MaterialTheme.typography.bodyMedium)
+        result.citations.forEachIndexed { index, citation ->
+            TextButton(onClick = {
+                if (runCatching { uri.openUri(citation.sourceUrl) }.isFailure) {
+                    scope.launch { snackbar.showSnackbar("没有可打开链接的浏览器应用") }
+                }
+            }) { Text("[${index + 1}] ${citation.sourceTitle}") }
         }
     }
 }

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <!-- 正式交付只使用 HTTPS；调试构建可通过 debug 资源覆盖以联调局域网服务。 -->
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

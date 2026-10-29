@@ -198,6 +198,34 @@ fun ChatScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
             ) { vm.useSample() }
         }
 
+        if (state.mode == ChatMode.REPLY) {
+            OutlinedActionButton(
+                text = if (state.offlineLoading) "本机理解中…" else "断网应急卡（本机）",
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.input.isNotBlank() && !state.offlineLoading,
+            ) { vm.generateOffline() }
+            Text("本机模型判断沟通目标，回复由固定模板组成；请核对后自行复制发送。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        state.offlineError?.let { InfoBanner(it) }
+        state.offlineCard?.let { card ->
+            MovaCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("离线应急卡 · ${card.goal}", style = MaterialTheme.typography.titleSmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(card.primary, modifier = Modifier.weight(1f))
+                        CopyIconButton(card.primary)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(card.alternative, modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall)
+                        CopyIconButton(card.alternative)
+                    }
+                }
+            }
+        }
+
         if (state.load.isLoading) {
             LoadingStages(
                 stages = listOf("正在理解这句话…", "正在生成候选与解释…"),
@@ -326,6 +354,9 @@ data class ChatUiState(
     val contextExpanded: Boolean = false,
     val messages: List<ChatMessage> = emptyList(),
     val load: LoadState<ChatDto> = LoadState.Idle,
+    val offlineLoading: Boolean = false,
+    val offlineCard: OfflineReplyCard? = null,
+    val offlineError: String? = null,
     /** 非空表示这次的内容是从其它应用分享进来的（详见 SharedInbox） */
     val fromShare: ShareSource? = null,
 )
@@ -367,13 +398,13 @@ class ChatViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setMode(mode: ChatMode) {
         container.repository.clearChatDecision()
-        _state.value = _state.value.copy(mode = mode, load = LoadState.Idle)
+        _state.value = _state.value.copy(mode = mode, load = LoadState.Idle, offlineCard = null, offlineError = null)
     }
 
     fun onInputChange(value: String) {
         container.repository.clearChatDecision()
         // 用户一旦手动改动内容，就不再强调"来自分享"
-        _state.value = _state.value.copy(input = value, fromShare = null)
+        _state.value = _state.value.copy(input = value, fromShare = null, offlineCard = null, offlineError = null)
     }
 
     fun setStyle(value: String) {
@@ -419,6 +450,24 @@ class ChatViewModel(private val container: AppContainer) : ViewModel() {
             style = "委婉",
             goal = "拒绝",
         )
+    }
+
+    fun generateOffline() {
+        val s = _state.value
+        if (s.mode != ChatMode.REPLY || s.input.isBlank() || s.offlineLoading) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(offlineLoading = true, offlineCard = null, offlineError = null)
+            val observation = container.repository.inspectEdge(s.input)
+            val decision = observation.decision
+            if (decision?.scene != "chat" || decision.intent != "reply_suggest") {
+                _state.value = _state.value.copy(offlineLoading = false,
+                    offlineError = observation.failure ?: "本机没有识别成回复请求，请检查模型或输入内容")
+                return@launch
+            }
+            val chosenGoal = s.goal.takeUnless { it == "不指定" } ?: decision.goal ?: "不指定"
+            _state.value = _state.value.copy(offlineLoading = false,
+                offlineCard = OfflineReplyTemplates.forGoal(chosenGoal, s.style))
+        }
     }
 
     fun generate() {

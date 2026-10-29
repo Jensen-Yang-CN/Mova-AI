@@ -157,11 +157,18 @@ private fun MovaNavHost(
     //   ① 首启向导没走完就不跳转 —— 否则用户会被直接扔进聊天页，错过权限与连接配置
     //   ② 已经在聊天页时不重复导航 —— 避免分享一次叠一层页面
     val pendingShare by MovaApp.instance.container.sharedInbox.pending.collectAsStateWithLifecycle()
+    val pendingActionShare by MovaApp.instance.container.actionShareInbox.pending.collectAsStateWithLifecycle()
     val openCity by MovaApp.instance.container.openCity.collectAsStateWithLifecycle()
     LaunchedEffect(openCity, onboardingDone) {
         if (openCity && onboardingDone) {
             navController.navigate(Routes.CITY_CARD) { launchSingleTop = true }
             MovaApp.instance.container.openCity.value = false
+        }
+    }
+    LaunchedEffect(pendingActionShare, onboardingDone) {
+        if (pendingActionShare != null && onboardingDone &&
+            navController.currentDestination?.route != Routes.READING) {
+            navController.navigate(Routes.READING) { launchSingleTop = true }
         }
     }
     LaunchedEffect(pendingShare, onboardingDone) {

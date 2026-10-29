@@ -1,5 +1,8 @@
 package com.mova.sceneai.ui.reading
 
+import android.content.Intent
+import android.provider.CalendarContract
+import java.time.OffsetDateTime
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -27,14 +31,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.mova.sceneai.MovaApp
 import com.mova.sceneai.core.AppContainer
+import com.mova.sceneai.core.ImageCompressor
 import com.mova.sceneai.core.LoadState
 import com.mova.sceneai.core.PickedMedia
 import com.mova.sceneai.core.movaViewModel
 import com.mova.sceneai.core.rememberPhotoCapture
 import com.mova.sceneai.core.toUiError
+import com.mova.sceneai.data.model.ActionCardDto
+import com.mova.sceneai.data.model.ActionTaskDto
 import com.mova.sceneai.data.model.ReadingDto
 import com.mova.sceneai.ui.components.BulletList
+import com.mova.sceneai.ui.components.CopyIconButton
 import com.mova.sceneai.ui.components.ErrorCard
 import com.mova.sceneai.ui.components.InfoBanner
 import com.mova.sceneai.ui.components.LoadingStages
@@ -49,6 +58,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 阅读场景。
@@ -62,6 +73,14 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by remember { mutableIntStateOf(0) }
 
+    val actionCapture = rememberPhotoCapture(onImage = { vm.actionImage(it) })
+    val pendingImage by MovaApp.instance.container.actionShareInbox.pending.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(pendingImage) {
+        if (pendingImage != null) {
+            tab = 1
+            vm.consumeSharedImage()
+        }
+    }
     val capture = rememberPhotoCapture(
         onImage = { vm.readImage(it) },
         onPdf = { vm.readPdf(it) },
@@ -100,6 +119,12 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                         ) { vm.summarizeText() }
                         Spacer(Modifier.height(8.dp))
                         OutlinedActionButton(
+                            text = "从通知提取待办",
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = state.text.isNotBlank() && !state.actionLoad.isLoading,
+                        ) { vm.actionText() }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedActionButton(
                             text = "试试示例",
                             modifier = Modifier.fillMaxWidth(),
                             icon = Icons.Filled.AutoAwesome,
@@ -127,6 +152,15 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
                                 icon = Icons.Filled.PhotoLibrary,
                                 modifier = Modifier.fillMaxWidth(),
                             ) { capture.pickFromGallery() }
+                            state.sharedImage?.let {
+                                Spacer(Modifier.height(8.dp))
+                                InfoBanner("已收到分享截图；确认后才会发送给云端识别")
+                                SolidActionButton(text = "提取分享截图的待办",
+                                    modifier = Modifier.fillMaxWidth()) { vm.actionImage(it) }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedActionButton(text = "从通知截图提取待办",
+                                modifier = Modifier.fillMaxWidth()) { actionCapture.pickFromGallery() }
                         }
                     }
 
@@ -163,6 +197,13 @@ fun ReadingScreen(onBack: () -> Unit, onOpenSettings: () -> Unit) {
         }
 
         (state.load as? LoadState.Success)?.let { ReadingResultCard(it.data) }
+
+        if (state.actionLoad.isLoading) LoadingStages(
+            stages = listOf("正在读取通知…", "正在核对待办与原文…"), activeIndex = 1)
+        (state.actionLoad as? LoadState.Failed)?.let { failed ->
+            ErrorCard(error = failed.error, onRetry = vm::retryAction, onOpenSettings = onOpenSettings)
+        }
+        (state.actionLoad as? LoadState.Success)?.let { ActionCardResult(it.data) }
     }
 }
 
@@ -217,6 +258,50 @@ private fun ReadingResultCard(dto: ReadingDto) {
     }
 }
 
+@Composable
+private fun ActionCardResult(card: ActionCardDto) {
+    val context = LocalContext.current
+    MovaCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(card.title, style = MaterialTheme.typography.titleMedium)
+            Text("请对照原文确认行动和日期，保存日历前仍需你确认。",
+                style = MaterialTheme.typography.bodySmall)
+            if (card.tasks.isEmpty()) InfoBanner("没找到可用原文核对的待办，请检查通知内容。")
+            card.tasks.forEach { task ->
+                MovaCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(task.title, style = MaterialTheme.typography.titleSmall)
+                        Text("原文：${task.evidence}", style = MaterialTheme.typography.bodySmall)
+                        Text("时间：${task.dueAt ?: "原文未给出完整时间"}",
+                            style = MaterialTheme.typography.bodySmall)
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Text("复制待办", style = MaterialTheme.typography.bodySmall)
+                            CopyIconButton(task.title)
+                            Spacer(Modifier.weight(1f))
+                            if (actionMillis(task) != null) {
+                                OutlinedActionButton(text = "加入日历") {
+                                    val millis = actionMillis(task) ?: return@OutlinedActionButton
+                                    val intent = Intent(Intent.ACTION_INSERT).apply {
+                                        data = CalendarContract.Events.CONTENT_URI
+                                        putExtra(CalendarContract.Events.TITLE, task.title)
+                                        putExtra(CalendarContract.Events.DESCRIPTION, task.evidence)
+                                        putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, millis)
+                                        putExtra(CalendarContract.EXTRA_EVENT_END_TIME, millis + 30 * 60_000L)
+                                    }
+                                    runCatching { context.startActivity(intent) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun actionMillis(task: ActionTaskDto): Long? =
+    task.dueAt?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
+
 // ============================================================
 // ViewModel
 // ============================================================
@@ -224,6 +309,8 @@ private fun ReadingResultCard(dto: ReadingDto) {
 data class ReadingUiState(
     val text: String = "",
     val load: LoadState<ReadingDto> = LoadState.Idle,
+    val actionLoad: LoadState<ActionCardDto> = LoadState.Idle,
+    val sharedImage: PickedMedia? = null,
 )
 
 class ReadingViewModel(private val container: AppContainer) : ViewModel() {
@@ -232,6 +319,7 @@ class ReadingViewModel(private val container: AppContainer) : ViewModel() {
     val state: StateFlow<ReadingUiState> = _state.asStateFlow()
 
     private var lastAction: (suspend () -> ReadingDto)? = null
+    private var lastCardAction: (suspend () -> ActionCardDto)? = null
 
     fun onTextChange(value: String) {
         _state.value = _state.value.copy(text = value)
@@ -249,6 +337,41 @@ class ReadingViewModel(private val container: AppContainer) : ViewModel() {
 
     fun readPdf(media: PickedMedia) {
         run(lastAction = { container.repository.readingPdf(media.bytes, media.filename) })
+    }
+
+    fun consumeSharedImage() {
+        val uri = container.actionShareInbox.take() ?: return
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val bytes = MovaApp.instance.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: error("无法读取分享的截图")
+                    PickedMedia(ImageCompressor.compress(bytes), "shared-notice.jpg")
+                }
+            }.onSuccess { _state.value = _state.value.copy(sharedImage = it) }
+                .onFailure { _state.value = _state.value.copy(actionLoad = LoadState.Failed(it.toUiError())) }
+        }
+    }
+
+    fun actionText() {
+        val content = _state.value.text
+        if (content.isNotBlank()) runCard { container.repository.readingActionText(content) }
+    }
+
+    fun actionImage(media: PickedMedia) {
+        runCard { container.repository.readingActionImage(media.bytes, media.filename) }
+    }
+
+    fun retryAction() { lastCardAction?.let(::runCard) }
+
+    private fun runCard(action: suspend () -> ActionCardDto) {
+        lastCardAction = action
+        viewModelScope.launch {
+            _state.value = _state.value.copy(actionLoad = LoadState.Loading)
+            runCatching { action() }
+                .onSuccess { _state.value = _state.value.copy(actionLoad = LoadState.Success(it)) }
+                .onFailure { _state.value = _state.value.copy(actionLoad = LoadState.Failed(it.toUiError())) }
+        }
     }
 
     fun useTextSample() {

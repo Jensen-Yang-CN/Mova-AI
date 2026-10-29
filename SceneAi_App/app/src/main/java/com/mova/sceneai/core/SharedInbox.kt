@@ -1,5 +1,6 @@
 package com.mova.sceneai.core
 
+import android.net.Uri
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,15 @@ data class SharedText(val text: String, val source: ShareSource)
  *
  * ⚠️ 取走即清空（take 而非 observe），避免用户切回聊天页时被重复触发一次生成。
  */
+/** 图片分享单独投递到阅读页，不与聊天的文字收件箱混用。 */
+class ActionShareInbox {
+    private val _pending = MutableStateFlow<Uri?>(null)
+    val pending: StateFlow<Uri?> = _pending.asStateFlow()
+
+    fun post(uri: Uri) { _pending.value = uri }
+    fun take(): Uri? = _pending.value.also { _pending.value = null }
+}
+
 class SharedInbox {
 
     private val _pending = MutableStateFlow<SharedText?>(null)

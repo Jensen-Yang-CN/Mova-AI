@@ -40,10 +40,10 @@ object ApiFactory {
         }
         .build()
 
-    /** 用完整地址调用，因此 baseUrl 只是一个占位符。 */
+    /** 所有方法都传完整的 Mova 后端地址；此占位符不会被用于实际请求。 */
     fun createApi(client: OkHttpClient, json: Json): MovaApi =
         Retrofit.Builder()
-            .baseUrl("http://localhost/")
+            .baseUrl("https://placeholder.invalid/")
             .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()

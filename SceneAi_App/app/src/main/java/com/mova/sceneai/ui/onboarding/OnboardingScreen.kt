@@ -292,10 +292,10 @@ private fun ConnectPage(
     val semantic = LocalMovaSemanticColors.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(16.dp))
-        Text("连接你的 AI 服务", style = MaterialTheme.typography.headlineMedium)
+        Text("连接 Mova 云端", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(10.dp))
         Text(
-            "复杂推理要交给云端的大模型。填一次就行，之后可以在设置里随时改。",
+            "手机端可先完成场景理解；生成完整回复需要连接 Mova 云端。地址之后可在设置里修改。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -304,13 +304,13 @@ private fun ConnectPage(
         OutlinedTextField(
             value = state.baseUrl,
             onValueChange = onUrlChange,
-            label = { Text("服务地址") },
-            placeholder = { Text("http://xxx.xxx.xxx.xxx:8000/") },
+            label = { Text("Mova 云端服务地址") },
+            placeholder = { Text("https://你的服务域名/") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             supportingText = {
                 Text(
-                    "模拟器用 10.0.2.2；真机填运行服务那台电脑的局域网 IP",
+                    "外部使用需要公网 HTTPS 后端；不要填写百炼模型 API 地址或密钥。",
                     style = MaterialTheme.typography.bodySmall,
                 )
             },
@@ -368,7 +368,7 @@ private fun ConnectPage(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "排查：① 地址是否形如 http://IP:8000/ ② 电脑上的服务是否已启动 ③ 手机与电脑是否在同一 WiFi",
+                        "排查：① 地址是否为 Mova 后端 ② 服务是否已启动 ③ 手机当前网络能否访问该地址",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f),
                     )

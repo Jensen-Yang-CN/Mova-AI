@@ -2,12 +2,15 @@ package com.mova.sceneai.data.repo
 
 import android.content.Context
 import android.net.Uri
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import com.mova.sceneai.core.Fmt
 import com.mova.sceneai.core.MovaSettings
 import com.mova.sceneai.core.SettingsRepository
 import com.mova.sceneai.data.local.LocalStore
 import com.mova.sceneai.data.edge.EdgeModelManager
 import com.mova.sceneai.data.edge.EdgeObservation
+import com.mova.sceneai.data.model.ActionCardDto
 import com.mova.sceneai.data.model.CapabilitiesDto
 import com.mova.sceneai.data.model.ChatContextRequest
 import com.mova.sceneai.data.model.ChatDto
@@ -105,7 +108,8 @@ class MovaRepository(
             metaOf = { it.meta },
             payloadOf = { json.encodeToString(FoodDto.serializer(), it) },
         ) {
-            api.analyzeImage(s.endpoint("analyze_image"), ApiFactory.imagePart(imageBytes, filename))
+            api.analyzeImage(s.endpoint("analyze_image"), ApiFactory.imagePart(imageBytes, filename),
+                s.foodAvoid.toRequestBody("text/plain".toMediaType()))
         }
     }
 
@@ -152,6 +156,21 @@ class MovaRepository(
         api.readingPdf(s.endpoint("reading/pdf"), ApiFactory.pdfPart(bytes, filename))
     }
 
+    /** 行动卡使用云端提取；保留原文证据供用户确认，再由日历应用完成最终保存。 */
+    suspend fun readingActionText(content: String): ActionCardDto {
+        val s = settingsRepo.current()
+        return call(s, s.timeoutSeconds * 1000L) {
+            api.readingActionText(s.endpoint("reading/action-text"), ReadingTextRequest(content))
+        }
+    }
+
+    suspend fun readingActionImage(bytes: ByteArray, filename: String): ActionCardDto {
+        val s = settingsRepo.current()
+        return call(s, s.timeoutSeconds * 1000L) {
+            api.readingActionImage(s.endpoint("reading/action-image"), ApiFactory.imagePart(bytes, filename))
+        }
+    }
+
     // ---------------------------------------------------------------
     // 聊天
     // ---------------------------------------------------------------
@@ -188,7 +207,7 @@ class MovaRepository(
             metaOf = { it.meta },
             payloadOf = { json.encodeToString(ChatDto.serializer(), it) },
         ) {
-            api.chatReply(s.endpoint("chat/reply"), ChatReplyRequest(context, style, chosenGoal))
+            api.chatReply(s.endpoint("chat/reply"), ChatReplyRequest(context, style, chosenGoal, s.chatPreference))
         }
     }
 

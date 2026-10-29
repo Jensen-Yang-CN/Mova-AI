@@ -1,6 +1,7 @@
 package com.mova.sceneai
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -47,6 +48,16 @@ class MainActivity : ComponentActivity() {
         if (intent == null) return
         if (intent.getBooleanExtra("open_city", false)) {
             (application as MovaApp).container.openCity.value = true
+        }
+
+        // 图片只暂存在 App 进程里；进入阅读页后仍由用户点击才会上传识别。
+        if (intent.action == Intent.ACTION_SEND && intent.type?.startsWith("image/") == true) {
+            val image = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+                ?: intent.clipData?.getItemAt(0)?.uri
+            if (image != null) {
+                (application as MovaApp).container.actionShareInbox.post(image)
+                return
+            }
         }
 
         val shared: String? = when (intent.action) {

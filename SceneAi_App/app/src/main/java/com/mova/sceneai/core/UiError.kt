@@ -35,10 +35,28 @@ enum class ErrorAction { None, Retry, OpenSettings }
  */
 fun Throwable.toUiError(baseUrl: String? = null): UiError = when (this) {
 
+    is ServiceNotConfiguredException -> UiError(
+        title = "云端服务尚未配置",
+        detail = "手机上的场景理解仍可使用；生成回复正文需要连接 Mova 云端服务。",
+        hint = "请在设置中填写可从手机网络访问的 Mova 服务 HTTPS 地址。",
+        actionLabel = "去设置",
+        action = ErrorAction.OpenSettings,
+        retryable = false,
+    )
+
+    is InvalidServiceAddressException -> UiError(
+        title = "服务地址格式不正确",
+        detail = "请填写完整的 HTTP 或 HTTPS 地址。",
+        hint = "对外使用时填写 Mova 后端的公网 HTTPS 地址，不是百炼模型 API 地址。",
+        actionLabel = "去设置",
+        action = ErrorAction.OpenSettings,
+        retryable = false,
+    )
+
     is UnknownHostException -> UiError(
         title = "找不到这个服务地址",
         detail = "手机无法解析「${baseUrl ?: "当前地址"}」，通常是地址写错了，或者手机没联网。",
-        hint = "地址格式应类似 http://xxx.xxx.xxx.xxx:8000/",
+        hint = "请检查设置中的 Mova 服务域名和手机网络。",
         actionLabel = "去设置",
         action = ErrorAction.OpenSettings,
         retryable = false,
@@ -46,10 +64,10 @@ fun Throwable.toUiError(baseUrl: String? = null): UiError = when (this) {
 
     is ConnectException -> UiError(
         title = "连不上服务",
-        detail = "地址能解析，但没有服务在监听。电脑上的服务可能没有启动。",
-        hint = "确认电脑已执行 uvicorn app:app --host 0.0.0.0 --port 8000，且端口与地址一致。",
-        actionLabel = "重试",
-        action = ErrorAction.Retry,
+        detail = "手机无法连接当前服务。服务可能未启动、地址已失效，或网络不允许访问。",
+        hint = "请检查设置中的 Mova 服务地址；对外使用需要公网 HTTPS 服务。",
+        actionLabel = "去设置",
+        action = ErrorAction.OpenSettings,
     )
 
     is SocketTimeoutException -> UiError(
@@ -66,7 +84,7 @@ fun Throwable.toUiError(baseUrl: String? = null): UiError = when (this) {
             401, 403 -> UiError(
                 title = "服务拒绝了这次请求",
                 detail = "服务端鉴权失败（HTTP $code），通常是服务端没配置好模型密钥。",
-                hint = "这是服务端配置问题，请在电脑上检查 .env 里的 API Key。",
+                hint = "请联系服务维护者检查云端鉴权配置。",
                 retryable = false,
             )
 
@@ -85,7 +103,7 @@ fun Throwable.toUiError(baseUrl: String? = null): UiError = when (this) {
             in 500..599 -> UiError(
                 title = "服务端处理失败",
                 detail = "服务内部出错了（HTTP $code），常见于模型调用失败或返回格式异常。",
-                hint = "稍后重试；如果一直失败，请查看电脑上服务的日志输出。",
+                hint = "稍后重试；如果一直失败，请联系服务维护者。",
                 actionLabel = "重试",
                 action = ErrorAction.Retry,
             )
@@ -93,7 +111,7 @@ fun Throwable.toUiError(baseUrl: String? = null): UiError = when (this) {
             else -> UiError(
                 title = "请求被拒绝",
                 detail = "服务返回了 HTTP $code。",
-                hint = "请查看电脑上服务的日志。",
+                hint = "请检查云端服务状态。",
             )
         }
     }
@@ -107,7 +125,7 @@ fun Throwable.toUiError(baseUrl: String? = null): UiError = when (this) {
     is IOException -> UiError(
         title = "网络请求失败",
         detail = message?.takeIf { it.isNotBlank() } ?: "网络连接中断。",
-        hint = "确认手机与电脑在同一个 WiFi，并且没有开启会拦截局域网的 VPN。",
+        hint = "请确认手机联网，并检查设置中的服务地址能否从当前网络访问。",
         actionLabel = "重试",
         action = ErrorAction.Retry,
     )

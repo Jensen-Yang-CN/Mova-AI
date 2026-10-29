@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-29",
+  "device": "OPPO Find X7 Ultra (PHY110)",
+  "android_version": "16",
+  "theme": "dark",
+  "network_transport": "Initial round used USB reverse; public network follow-up is in public-network-validation.json",
+  "apk_sha256": "e0d9d40aa65b3049753b384dfcae25856d0ad837ebcc556ad7b84e4455bb2f91",
+  "corpus_revision": "75a26ed246dcb2ec",
+  "installation": "Updated with adb install -r; existing model and cards retained",
+  "instrumentation": {"class": "CityRagDeviceTest", "passed": 2, "failed": 0, "elapsed_seconds": 7.441},
+  "checks": {
+    "old_card_upgraded_to_v4": true,
+    "evidence_expand_and_collapse": true,
+    "yueyang_answer_with_source": true,
+    "simulated_wuhan_to_qingdao": true,
+    "qingdao_card_persisted_across_process_restart": true,
+    "qingdao_food_answer_with_citations": true,
+    "live_opening_hours_declined": true,
+    "dark_layout_visual_review": true
+  },
+  "real_cloud_requests": [
+    {"case": "device instrumentation food query", "mode": "rag", "citations": 2, "backend_latency_ms": 1375},
+    {"case": "manual UI food query", "mode": "rag", "citations": 2, "backend_latency_ms": 1547}
+  ],
+  "fixes": [
+    "Replaced obsolete Yueyang rice-noodle source URL with the live government mobile article",
+    "Map restaurant fallback now excludes POIs whose primary type is accommodation; old map cache invalidated"
+  ],
+  "sources": {
+    "unique_pages": 10,
+    "desktop_http_accessible": 6,
+    "qingdao_pages_verified_in_phone_browser": 4,
+    "note": "Desktop Python TLS failed for Qingdao; all four Qingdao pages opened successfully in the phone browser"
+  },
+  "backend_regression": {"passed": 17, "failed": 0},
+  "limits": [
+    "Coordinates are simulated, not an actual railway trip",
+    "Latency values are individual backend requests, not overall phone response benchmarks",
+    "Offline question generation and long-duration background behavior were not tested"
+  ]
+}

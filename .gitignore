@@ -44,12 +44,28 @@ env/
 config.local.*
 
 # ==================== 数据流水线的中间产物 ====================
+.build/
 # 标注缓存体积大且可重新生成（重跑不会重复消耗 API 额度），不入库。
 # 仓库保留公开的 pilot 数据与报告；下载到 model_output 的正式评测产物留在本地。
 scene_ai_server/data/cache/
 # 自动城市推荐缓存可重新获取，不含模型权重，不写入公开 Git 历史。
 scene_ai_server/data/city_guides/
 scene_ai_server/data/model_output/
+docs/presentation/.build/
+# 答辩工作区含姓名、学校、联系方式和大型附件，仅用于本地提交。
+docs/presentation/output/
+# 竞赛构建缓存、含个人信息的报名材料及大型交付包仅留在本机。
+docs/competitions/AIC2026_AI软件创新/.build/
+docs/competitions/AIC2026_AI软件创新/内部资料/
+docs/competitions/AIC2026_AI软件创新/参赛选手承诺书.docx
+docs/competitions/AIC2026_AI软件创新/参赛选手承诺书.pdf
+docs/competitions/AIC2026_AI软件创新/AIC-2026-*/
+docs/presentation/output/项目简表/补充材料.zip
+# 两赛提交件含报名身份信息或体积较大；仅保留本地，README 可入库。
+docs/competitions/研创赛2026_创意设计赛/*
+!docs/competitions/研创赛2026_创意设计赛/README.md
+docs/competitions/数媒赛2026_移动与网络应用开发/*
+!docs/competitions/数媒赛2026_移动与网络应用开发/README.md
 # 训练、转换与推理的原始日志可能包含服务器绝对路径，只在本地留存。
 scene_ai_server/data/train_logs/
 # Android JNI 构建时引用的上游 llama.cpp 源码由独立版本锁定，不把第三方仓库嵌入本仓库。

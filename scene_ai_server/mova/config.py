@@ -1,7 +1,7 @@
 """配置：全项目唯一读取环境变量的地方。
 
 支持三种厂商（都走 OpenAI 兼容协议）：
-    dashscope  阿里云百炼（qwen3-max / qwen-vl-max）
+    dashscope  阿里云百炼（qwen-plus / qwen3-vl-plus）
     deepseek   DeepSeek 官方
     自定义      任何 OpenAI 兼容端点，用 MOVA_BASE_URL 指定
 
@@ -13,14 +13,15 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 VERSION = "2.0.0"
 
 _PROVIDER_DEFAULTS = {
     "dashscope": {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "llm": "qwen3-max",
-        "vision": "qwen-vl-max",
+        "llm": "qwen-plus",
+        "vision": "qwen3-vl-plus",
         "key_env": "DASHSCOPE_API_KEY",
     },
     "deepseek": {
@@ -61,6 +62,8 @@ class Settings:
     max_retries: int = 2
     max_upload_mb: int = 12
     max_pdf_pages: int = 3
+    public_requests_per_minute: int = 30
+    public_requests_per_day: int = 500
     allow_origins: list[str] = field(default_factory=lambda: ["*"])
     amap_key: str = ""
 
@@ -94,6 +97,16 @@ def load_settings(env_file: Path | None = None) -> Settings:
     )
     base_url = os.environ.get("MOVA_BASE_URL", "").strip() or defaults["base_url"]
 
+    # 切换离开内网 vLLM 时，旧 .env 中的 MOVA_BASE_URL 可能仍指向私有 IP。
+    # 百炼模式只接受官方 HTTPS 域名，避免误以为改了 provider 就已切到公网模型。
+    if provider == "dashscope":
+        parsed = urlparse(base_url)
+        if parsed.scheme != "https" or not (parsed.hostname or "").endswith(".aliyuncs.com"):
+            raise ConfigError(
+                "百炼模式的 MOVA_BASE_URL 必须使用阿里云官方 HTTPS 地址；"
+                "请删除旧内网地址，或改为当前地域的 OpenAI 兼容接口。"
+            )
+
     # 局域网 vLLM 可显式选择无鉴权模式；商业服务仍要求有效密钥。
     if not api_key and provider != "vllm":
         raise ConfigError(
@@ -116,5 +129,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         max_retries=int(os.environ.get("MOVA_MAX_RETRIES", "2")),
         max_upload_mb=int(os.environ.get("MOVA_MAX_UPLOAD_MB", "12")),
         max_pdf_pages=int(os.environ.get("MOVA_MAX_PDF_PAGES", "3")),
+        public_requests_per_minute=int(os.environ.get("MOVA_PUBLIC_REQUESTS_PER_MINUTE", "30")),
+        public_requests_per_day=int(os.environ.get("MOVA_PUBLIC_REQUESTS_PER_DAY", "500")),
         amap_key=os.environ.get("MOVA_AMAP_KEY", "").strip(),
     )

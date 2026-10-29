@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-29",
+  "device_follow_up": "device-validation.json",
+  "corpus_revision": "822cbee97a0d8405",
+  "retriever": "Chinese n-gram BM25 with city-code filter",
+  "cities": 3,
+  "knowledge_items": 12,
+  "source_pages": 10,
+  "backend_unit_tests": {"passed": 17, "failed": 0},
+  "android_unit_tests": {"passed": 6, "failed": 0, "new_contract_tests": 2},
+  "android_debug_apk": "build passed; app-debug.apk generated",
+  "http_smoke": [
+    {"case": "Qingdao guide", "status": 200, "generation": "knowledge", "items": 5},
+    {"case": "Qingdao foods", "status": 200, "mode": "rag", "citations": 2, "latency_ms": 2234},
+    {"case": "Badaguan description", "status": 200, "mode": "rag", "citations": 1, "latency_ms": 1703},
+    {"case": "live opening hours", "status": 200, "mode": "insufficient", "citations": 0},
+    {"case": "unavailable city", "status": 200, "mode": "insufficient", "citations": 0},
+    {"case": "unrelated question", "status": 200, "mode": "insufficient", "citations": 0},
+    {"case": "invalid city code", "status": 422}
+  ],
+  "cloud_selector": "Two requests verified with the configured real cloud provider",
+  "limits": [
+    "Latency values are individual requests, not a benchmark average",
+    "This initial report predates device validation; see device-validation.json",
+    "No embedding model, vector database or reranker in this version"
+  ]
+}

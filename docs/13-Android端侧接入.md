@@ -1,6 +1,6 @@
 # Android 端侧 GGUF 接入与验收
 
-> 2026-10-12：Android 依赖已安装到 E 盘，arm64 / x86_64 APK 编译通过；OPPO Find X7 Ultra（Android 16）已安装、导入并加载 Q4_K_M GGUF。本地中文真机冒烟通过，自建模型服务已完成回复、文本阅读与食材示例请求。界面与竞赛叙事见 docs/14。
+> 2026-10-12：Android 依赖已安装到 E 盘，arm64 / x86_64 APK 编译通过；OPPO Find X7 Ultra（Android 16）已安装、导入并加载 Q4_K_M GGUF。本地中文真机冒烟通过，自建模型服务已完成回复、文本阅读与食材示例请求。
 
 ## 运行边界
 
@@ -38,22 +38,21 @@
 
 `tools/export_android_edge_assets.py` 从训练用 `pipeline.contract.contract_prompt` 导出 `edge_prompt.template.txt`，并从脱敏的 `artifacts/release-v1/metrics.json` 导出 `edge_model.json`。完整前缀包含 Qwen3 `enable_thinking=False` 的空 `<think>` 段，与服务器保存的单条冒烟提示逐字对照。更改训练契约或发布模型后必须重新运行导出脚本、重新编译 App，不要直接手改资产文本。端侧输出由 Kotlin 的 `EdgeDecisionParser` 校验；契约失败时回退云端。
 
-
 ## 2026-10-12 本机环境与实测记录
 
-| 项目 | 本次配置 |
-|---|---|
-| SDK | `E:\Efilefolder\Android\sdk`；Android 36 平台 revision 2、Build-Tools 36.0.0、platform-tools 37.0.1 |
-| NDK / CMake | 27.0.12077973 / 3.22.1；版本在 Gradle 中固定 |
-| Gradle / JDK | Gradle 8.13 / JDK 20；Gradle 缓存在 E 盘 |
-| APK ABI | arm64-v8a 与 x86_64；手机使用 ARM CPU 后端 |
-| ARM 内核 | armv8.2-a+dotprod；JNI 加载前检查 FP16、dotprod、原子指令，旧设备安全回退 |
-| 手机 | OPPO Find X7 Ultra，Android 16；页大小 4096 字节 |
-| 模型安装 | 系统文件选择器导入，私有目录大小 396,704,544 字节，App 核验 SHA-256 |
-| 中文输入 | 1090 个提示 token；使用本文档示例的合伙人搬家回复诉求 |
-| 单线程核验 | 本地推理 23,057 ms，输出合法且为 chat / reply_suggest；仅一个样本 |
-| 四线程核验 | JUnit `OK (1 test)`；整条测试 11.231 秒，包含初始化；不是平均推理延迟 |
-| 云端联调 | 自建 Qwen 服务，回复示例 HTTP 200、一次服务生成耗时 2406 ms；文本阅读和食材示例也返回 HTTP 200 |
+| 项目         | 本次配置                                                                                            |
+| ------------ | --------------------------------------------------------------------------------------------------- |
+| SDK          | `E:\Efilefolder\Android\sdk`；Android 36 平台 revision 2、Build-Tools 36.0.0、platform-tools 37.0.1 |
+| NDK / CMake  | 27.0.12077973 / 3.22.1；版本在 Gradle 中固定                                                        |
+| Gradle / JDK | Gradle 8.13 / JDK 20；Gradle 缓存在 E 盘                                                            |
+| APK ABI      | arm64-v8a 与 x86_64；手机使用 ARM CPU 后端                                                          |
+| ARM 内核     | armv8.2-a+dotprod；JNI 加载前检查 FP16、dotprod、原子指令，旧设备安全回退                           |
+| 手机         | OPPO Find X7 Ultra，Android 16；页大小 4096 字节                                                    |
+| 模型安装     | 系统文件选择器导入，私有目录大小 396,704,544 字节，App 核验 SHA-256                                 |
+| 中文输入     | 1090 个提示 token；使用本文档示例的合伙人搬家回复诉求                                               |
+| 单线程核验   | 本地推理 23,057 ms，输出合法且为 chat / reply_suggest；仅一个样本                                   |
+| 四线程核验   | JUnit `OK (1 test)`；整条测试 11.231 秒，包含初始化；不是平均推理延迟                               |
+| 云端联调     | 自建 Qwen 服务，回复示例 HTTP 200、一次服务生成耗时 2406 ms；文本阅读和食材示例也返回 HTTP 200      |
 
 ### 本轮发现的问题与处理
 
@@ -83,8 +82,9 @@
 .\tools\run_android.ps1 -Smoke
 ```
 
-手机 App 的服务地址填写 `http://127.0.0.1:8000/`。此地址依赖 USB 调试的 ADB reverse，断开后应连接可访问的真实服务；正式展示需说明运行环境。原始手机日志与包含地址的 `.env` 不提交，公开记录不含设备序列号、密钥或服务器 IP。
+上述 USB 本机联调可填写 `http://127.0.0.1:8000/`，它依赖 ADB reverse。2026-10-29 的当前演示包已改用固定公网 HTTPS `/api/` 地址，并移除 USB 转发，在手机移动网络下验证了真实 RAG 请求。普通更新构建从被忽略的 `local.properties` 读取公网默认地址；部署操作见 `scene_ai_server/PUBLIC_DEPLOY.md`。FastAPI 仍由电脑运行并经 Funnel 提供访问，尚未迁移到独立云主机。
 
+原始手机日志与包含地址的 `.env` 不提交，公开记录不含设备序列号、密钥或服务器 IP。
 
 ### 改版后的完整手机操作闭环
 

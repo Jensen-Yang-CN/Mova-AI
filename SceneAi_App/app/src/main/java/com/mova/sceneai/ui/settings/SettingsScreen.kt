@@ -81,12 +81,12 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                 OutlinedTextField(
                     value = state.baseUrl,
                     onValueChange = vm::onBaseUrlChange,
-                    label = { Text("服务地址") },
+                    label = { Text("Mova 云端服务地址") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     supportingText = {
                         Text(
-                            "模拟器用 10.0.2.2；真机填电脑的局域网 IP",
+                            "对外使用请填公网 HTTPS 地址；这里不是百炼模型 API 地址，密钥只配置在服务端。",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     },
@@ -187,6 +187,34 @@ fun SettingsScreen(onOpenAbout: () -> Unit, onRerunOnboarding: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        // ---------- 用户主动保存的偏好 ----------
+        SectionHeader("我的偏好", "仅在生成回复或菜谱时随请求发送")
+        MovaCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = state.chatPreference,
+                    onValueChange = vm::setChatPreferenceDraft,
+                    label = { Text("回复偏好") },
+                    placeholder = { Text("例如：简短、不要客套") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = state.foodAvoid,
+                    onValueChange = vm::setFoodAvoidDraft,
+                    label = { Text("忌口食材") },
+                    placeholder = { Text("例如：香菜、花生") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SolidActionButton(text = "保存偏好", modifier = Modifier.fillMaxWidth()) {
+                    vm.savePreferences()
+                }
+                Text("偏好保存在本机，可随时修改或清空；对应功能请求会把它发给当前云端服务。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (state.preferencesSaved) Text("已保存到本机", color = LocalMovaSemanticColors.current.success)
             }
         }
 
@@ -341,6 +369,9 @@ private fun formatMinutes(minutes: Int): String =
 data class SettingsUiState(
     val baseUrl: String = "",
     val timeoutSeconds: Int = 60,
+    val chatPreference: String = "",
+    val foodAvoid: String = "",
+    val preferencesSaved: Boolean = false,
     val proactiveEnabled: Boolean = true,
     val dndEnabled: Boolean = false,
     val dndStart: Int = 23 * 60,
@@ -367,6 +398,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(
                 baseUrl = s.baseUrl,
                 timeoutSeconds = s.timeoutSeconds,
+                chatPreference = s.chatPreference,
+                foodAvoid = s.foodAvoid,
                 proactiveEnabled = s.proactiveEnabled,
                 dndEnabled = s.dndEnabled,
                 dndStart = s.dndStartMinutes,
@@ -429,6 +462,21 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                         healthMessage = "${ui.title}。${ui.hint ?: ui.detail}",
                     )
                 }
+        }
+    }
+
+    fun setChatPreferenceDraft(value: String) {
+        _state.value = _state.value.copy(chatPreference = value.take(200), preferencesSaved = false)
+    }
+
+    fun setFoodAvoidDraft(value: String) {
+        _state.value = _state.value.copy(foodAvoid = value.take(200), preferencesSaved = false)
+    }
+
+    fun savePreferences() {
+        viewModelScope.launch {
+            container.settings.setPreferences(_state.value.chatPreference, _state.value.foodAvoid)
+            _state.value = _state.value.copy(preferencesSaved = true)
         }
     }
 

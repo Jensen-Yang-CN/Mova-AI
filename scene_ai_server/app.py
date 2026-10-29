@@ -25,14 +25,18 @@ from typing import Any
 from typing import Literal
 from dataclasses import replace
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from mova import prompts
 from mova.config import VERSION, ConfigError, load_settings
 from mova.providers import OpenAICompatProvider, ProviderError, extract_json
 from mova.cities import CityServiceError, resolve_city, city_guide
+from mova.quota import RequestQuota
+from mova.action_card import normalize_action_card
+from mova.city_kb import knowledge_base
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +75,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# cpolar 隧道会把服务暴露给公网。对会触发模型或地图计费的接口设置全局上限；
+# 健康检查与能力清单不计入，避免 App 的连接检测消耗额度。
+PUBLIC_QUOTA = RequestQuota(
+    SETTINGS.public_requests_per_minute, SETTINGS.public_requests_per_day
+)
+METERED_PATHS = {
+    "/city/resolve", "/city/guide", "/city/ask", "/analyze_image",
+    "/reading/text", "/reading/image", "/reading/pdf",
+    "/reading/action-text", "/reading/action-image",
+    "/chat/reply", "/chat/rewrite", "/chat/context",
+}
+
+
+@app.middleware("http")
+async def limit_public_requests(request: Request, call_next):
+    if request.url.path in METERED_PATHS and not PUBLIC_QUOTA.allow():
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "服务请求过于频繁，请稍后再试"},
+            headers={"Retry-After": "60"},
+        )
+    return await call_next(request)
+
 
 # ===============================================================
 # 契约
@@ -84,6 +111,7 @@ class ChatReplyRequest(BaseModel):
     context: str = Field(min_length=1, description="对方说的话")
     style: str = "自然"
     goal: str = ""
+    preference: str = Field(default="", max_length=200)
 
 
 class ChatRewriteRequest(BaseModel):
@@ -122,10 +150,21 @@ def city_guide_endpoint(city_code: str, city_name: str = "新城市") -> dict:
     if len(city_code) != 6 or not city_code.isdigit() or len(city_name) > 40:
         raise HTTPException(status_code=422, detail="城市标识不合法")
     try:
-        return city_guide(city_code, city_name, SETTINGS.amap_key,
-                          lambda prompt: CITY_PROVIDER.chat_text(prompt, temperature=0.2))
+        return city_guide(city_code, city_name, SETTINGS.amap_key)
     except CityServiceError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
+
+
+class CityQuestionRequest(BaseModel):
+    city_code: str = Field(pattern=r"^\d{6}$")
+    question: str = Field(min_length=2, max_length=300)
+
+
+@app.post("/city/ask", summary="根据本城已核实资料回答问题并附来源")
+def city_question_endpoint(body: CityQuestionRequest) -> dict:
+    # 单轮资料问答不发送坐标、行程历史或其他城市卡片。模型只选择证据 ID。
+    return knowledge_base().answer(body.city_code, body.question.strip(),
+        lambda prompt: CITY_PROVIDER.chat_text(prompt, temperature=0))
 
 
 # ===============================================================
@@ -284,7 +323,7 @@ async def capabilities() -> dict[str, Any]:
 # ===============================================================
 
 @app.post("/analyze_image", summary="识别食材并生成菜谱")
-async def analyze_image(file: UploadFile = File(...)) -> dict[str, Any]:
+async def analyze_image(file: UploadFile = File(...), avoid: str = Form("")) -> dict[str, Any]:
     """两级串联：视觉模型只负责识别，语言模型只负责生成。
 
     拆两级的原因：视觉模型在长输出里容易跑偏，而识别环节的 prompt 可以极简；
@@ -303,7 +342,7 @@ async def analyze_image(file: UploadFile = File(...)) -> dict[str, Any]:
         logger.info("识别结果：%s", ingredients[:120])
 
         t1 = time.monotonic()
-        raw = PROVIDER.chat_text(prompts.recipe_prompt(ingredients))
+        raw = PROVIDER.chat_text(prompts.recipe_prompt(ingredients, avoid))
         generate_ms = int((time.monotonic() - t1) * 1000)
     except ProviderError as exc:
         raise provider_error(exc) from exc
@@ -369,6 +408,39 @@ async def reading_image(file: UploadFile = File(...)) -> dict[str, Any]:
     }
 
 
+@app.post("/reading/action-text", summary="从文字通知提取行动卡")
+async def reading_action_text(req: ReadingTextRequest) -> dict[str, Any]:
+    return await _action_card(req.content)
+
+
+@app.post("/reading/action-image", summary="从通知截图提取行动卡")
+async def reading_action_image(file: UploadFile = File(...)) -> dict[str, Any]:
+    started = time.monotonic()
+    image_bytes, _mime = await read_upload(file, allow=("jpeg", "png"))
+    try:
+        source = PROVIDER.chat_vision(prompts.ACTION_IMAGE_OCR, image_bytes)
+    except ProviderError as exc:
+        raise provider_error(exc) from exc
+    if not source.strip():
+        raise HTTPException(status_code=422, detail="图片里没有识别到可读文字")
+    return await _action_card(source, started=started, ocr_model=SETTINGS.vision_model)
+
+
+async def _action_card(source: str, *, started: float | None = None, ocr_model: str = "") -> dict[str, Any]:
+    started = started or time.monotonic()
+    try:
+        raw = PROVIDER.chat_text(prompts.action_card_prompt(source))
+    except ProviderError as exc:
+        raise provider_error(exc) from exc
+    parsed = extract_json(raw)
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=502, detail="行动卡未返回结构化结果，请重试")
+    card = normalize_action_card(parsed, source)
+    return {**card, "source_text": source[:12000],
+            "meta": build_meta((ocr_model + "+" if ocr_model else "") + SETTINGS.llm_model,
+                               int((time.monotonic() - started) * 1000))}
+
+
 @app.post("/reading/pdf", summary="总结 PDF 前若干页")
 async def reading_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
     started = time.monotonic()
@@ -408,7 +480,7 @@ async def reading_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
 @app.post("/chat/reply", summary="生成一条回复建议")
 async def chat_reply(req: ChatReplyRequest) -> dict[str, Any]:
     return await _chat(
-        prompts.chat_reply_prompt(req.context, req.style, req.goal), "chat", req.style
+        prompts.chat_reply_prompt(req.context, req.style, req.goal, req.preference), "chat", req.style
     )
 
 

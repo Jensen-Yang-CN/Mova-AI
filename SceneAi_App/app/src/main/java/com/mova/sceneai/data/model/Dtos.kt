@@ -52,6 +52,22 @@ data class ReadingDto(
     val meta: MetaDto? = null,
 )
 
+/** 通知行动卡：只有原文证据核对通过的任务才会出现在列表中。 */
+@Serializable
+data class ActionTaskDto(
+    val title: String = "",
+    @SerialName("due_at") val dueAt: String? = null,
+    val evidence: String = "",
+)
+
+@Serializable
+data class ActionCardDto(
+    val title: String = "待办行动卡",
+    val tasks: List<ActionTaskDto> = emptyList(),
+    @SerialName("source_text") val sourceText: String = "",
+    val meta: MetaDto? = null,
+)
+
 @Serializable
 data class ChatDto(
     val scene: String = "chat",
@@ -110,6 +126,7 @@ data class ChatReplyRequest(
     val style: String = "自然",
     /** 用户显式目标优先；未指定时可采用端侧抽取的 goal。 */
     val goal: String = "",
+    val preference: String = "",
 )
 
 @Serializable

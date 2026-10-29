@@ -1,8 +1,11 @@
 """城市服务边界测试：不发送网络请求，不使用真实地图 Key。"""
 import unittest
+import tempfile
+import json
+from pathlib import Path
 from unittest.mock import patch
 import requests
-from mova.cities import resolve_city, city_guide, CityServiceError, _search, _generate_guide
+from mova.cities import resolve_city, city_guide, CityServiceError, _search
 
 
 class CityServiceTests(unittest.TestCase):
@@ -39,36 +42,34 @@ class CityServiceTests(unittest.TestCase):
             places = _search("example", "110000", "测试")
         self.assertEqual([p["name"] for p in places], ["测试景点甲"])
 
-    def test_any_new_city_can_generate_food_and_verified_sights(self):
-        # 虚构名称只作为测试输入，测试不调用网络或写入推荐缓存。
-        def lookup(key, code, keyword="", category=""):
-            if keyword == "测试景区":
-                return [{"name": "测试景区", "typecode": "110200"}]
-            return []
-        with patch("mova.cities._safe_search", side_effect=lookup):
-            guide = _generate_guide("330100", "杭州市", "example",
-                                    lambda _: '{"foods":["测试菜"],"sights":["测试景区"]}')
-        self.assertEqual(guide["foods"], ["测试菜"])
-        self.assertEqual(guide["sights"], ["测试景区"])
-        self.assertEqual(guide["generation"], "ai_map")
+    def test_known_city_uses_sources_without_calling_model_or_map(self):
+        with patch("mova.cities._safe_search", side_effect=AssertionError("不应请求地图")):
+            guide = city_guide("370200", "青岛市", "example", lambda _: self.fail("不应猜测知识"))
+        self.assertIn("鲅鱼水饺", guide["foods"])
+        self.assertEqual(guide["knowledge_status"], "available")
+        self.assertTrue(all(i["source_url"].startswith("https://") for i in guide["knowledge"]))
 
-    def test_unrelated_or_parking_poi_is_not_a_verified_sight(self):
+    def test_unknown_city_map_fallback_is_labeled_as_places(self):
         def lookup(key, code, keyword="", category=""):
-            if keyword:
-                return [{"name": "测试景区停车场", "typecode": "150900"}]
-            return []
-        with patch("mova.cities._safe_search", side_effect=lookup):
-            guide = _generate_guide("330100", "杭州市", "example",
-                                    lambda _: '{"foods":["测试菜"],"sights":["测试景区"]}')
-        self.assertEqual(guide["sights"], [])
-
-    def test_model_failure_falls_back_to_actual_map_places(self):
-        def lookup(key, code, keyword="", category=""):
-            return [{"name": "地图餐厅" if category == "050000" else "地图景点"}]
-        with patch("mova.cities._safe_search", side_effect=lookup):
-            guide = _generate_guide("330100", "杭州市", "example", lambda _: "broken JSON")
+            if category == "050000":
+                return [{"name": "附带餐饮的宾馆", "typecode": "100103|050000"},
+                        {"name": "地图餐厅", "typecode": "050100"}]
+            return [{"name": "地图景点", "typecode": category}]
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch("mova.cities._safe_search", side_effect=lookup), patch("mova.cities.CACHE_DIR", Path(temporary)):
+                guide = city_guide("999998", "未收录城市", "example", lambda _: self.fail("不应猜特色菜"))
         self.assertEqual(guide["food_kind"], "places")
+        self.assertEqual(guide["knowledge_status"], "missing")
         self.assertTrue(guide["foods"] and guide["sights"])
+        self.assertEqual(guide["foods"], ["地图餐厅"])
+
+    def test_old_unsourced_cache_is_not_reused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / "999998.json").write_text(json.dumps({"version": 3, "foods": ["旧版模型猜测"]}), encoding="utf-8")
+            with patch("mova.cities.CACHE_DIR", Path(temporary)), patch("mova.cities._safe_search", return_value=[]):
+                guide = city_guide("999998", "未收录城市", "example")
+        self.assertEqual(guide["foods"], [])
+        self.assertEqual(guide["version"], 4)
 
 
 if __name__ == "__main__":
